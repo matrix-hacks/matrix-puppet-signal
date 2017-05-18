@@ -1,4 +1,7 @@
 const Promise = require('bluebird');
+process.on('unhandledRejection', function(reason, p){
+  console.log("Possibly Unhandled Rejection at: Promise ", p, " reason: ", reason);
+});
 global.window = global;
 window.location = { origin: "hacks" } // need this to avoid opaque origin error in indexeddb shim
 global.XMLHttpRequest = require('xhr2');
@@ -8,6 +11,12 @@ global.Backbone = require('./lib/signaljs/components/backbone/backbone');
 global.Backbone.$ = require('jquery-deferred');
 global.Event = function(type) {
   this.type = type;
+}
+window.setUnreadCount = function(count) {
+  console.log('unread count:', count);
+}
+window.clearAttention = function() {
+  // called when unreadcount is set to 0
 }
 
 const setGlobalIndexedDbShimVars = require('indexeddbshim');
@@ -32,7 +41,7 @@ global.WebSocket = require('ws');
 global.dcodeIO = {}
 dcodeIO.Long = require('./lib/signaljs/components/long/dist/Long');
 dcodeIO.ProtoBuf = require('./lib/signaljs/components/protobuf/dist/ProtoBuf');
-dcodeIO.ByteBuffer = require('./lib/signaljs/components/bytebuffer/dist/ByteBufferAB');
+dcodeIO.ByteBuffer = require('bytebuffer');
 
 //require('./signaljs/components');
 require('./lib/signaljs/signal_protocol_store');
@@ -56,6 +65,8 @@ window.textsecure.storage.impl = {
       }
       return ab;
     }
+
+    console.log('STORAGE GET', key);
 
 
     let ret;
@@ -102,6 +113,9 @@ require('./lib/signaljs/expiring_messages');
 
 global.libphonenumber = require('./lib/signaljs/components/libphonenumber-api/libphonenumber_api-compiled');
 require('./lib/signaljs/libphonenumber-util');
+
+require('./lib/signaljs/models/conversations');
+require('./lib/signaljs/conversation_controller');
 
 
 var SERVER_URL = 'https://textsecure-service-ca.whispersystems.org';
@@ -169,19 +183,6 @@ function init(firstRun) {
     global.textsecure.messaging = new textsecure.MessageSender(
         SERVER_URL, SERVER_PORTS, USERNAME, PASSWORD
     );
-
-  console.log('sync request!');
-  var syncRequest = new textsecure.SyncRequest(textsecure.messaging, messageReceiver);
-  Whisper.events.trigger('contactsync:begin');
-  syncRequest.addEventListener('success', function() {
-    console.log('sync successful');
-    storage.put('synced_at', Date.now());
-    Whisper.events.trigger('contactsync');
-  });
-  syncRequest.addEventListener('timeout', function() {
-    console.log('sync timed out');
-    Whisper.events.trigger('contactsync');
-  });
 }
 
 function onContactReceived(ev) {
@@ -225,10 +226,12 @@ function onGroupReceived(ev) {
 }
 
 function onMessageReceived(ev) {
-  console.log('message received');
-    var data = ev.data;
-    var message = initIncomingMessage(data.source, data.timestamp);
-    message.handleDataMessage(data.message);
+  var data = ev.data;
+  const { source, message: { body } } = data;
+  console.log('incoming message:', source, 'says', body);
+  setTimeout(function() {
+    console.log('echoing...');
+  }, 200);
 }
 
 function onSentMessage(ev) {
@@ -323,25 +326,23 @@ const args = require('minimist')(process.argv);
 
 const [bin, script, cmd] = args._;
 
-//if (cmd === "link") {
-//  linkAccount();
-//} else {
-//  init();
-//}
-
 if (Whisper.Registration.everDone()) {
   init();
 }
 if (!Whisper.Registration.isDone()) {
-      linkAccount();
+  linkAccount();
 }
 
-//            var store = textsecure.storage.protocol;
-//            store.getIdentityKeyPair().then(function(identityKey) {
-//              console.log('identity key', identityKey);
-//            });
-
-process.on('unhandledRejection', function(reason, p){
-  console.log("Possibly Unhandled Rejection at: Promise ", p, " reason: ", reason);
-  // application specific logging here
-});
+//setTimeout(function() {
+//  console.log('sending......');
+//  textsecure.messaging.sendMessageToNumber(
+//    "+19498875144",
+//    "Hello",
+//    [],
+//    new Date().getTime()
+//  ).then(function() {
+//    console.log('ok');
+//  }).catch(function(err) {
+//    console.log(err);
+//  });
+//}, 3000);
