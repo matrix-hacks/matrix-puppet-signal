@@ -307,7 +307,7 @@ Whisper.events.on('reconnectTimer', function() {
 const qrcode = require('qrcode-terminal');
 
 function linkAccount() {
-  getAccountManager().registerSecondDevice(
+  return getAccountManager().registerSecondDevice(
     function setProvisioningUrl(url) {
       qrcode.generate(url);
       console.log(url);
@@ -330,7 +330,9 @@ if (Whisper.Registration.everDone()) {
   init();
 }
 if (!Whisper.Registration.isDone()) {
-  linkAccount();
+  linkAccount().then(function() {
+    init();
+  });
 }
 
 //setTimeout(function() {
