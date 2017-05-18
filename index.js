@@ -9,7 +9,9 @@ global.btoa = function (str) {
 };
 global.storage = require('node-persist');
 global.Whisper = {};
-global.crypto = require('@trust/webcrypto');
+var WebCryptoOSSL = require("node-webcrypto-ossl");
+global.crypto = new WebCryptoOSSL();
+
 global.indexedDB = require('indexeddb');
 global.WebSocket = require('ws');
 
