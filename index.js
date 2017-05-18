@@ -1,20 +1,28 @@
 const Promise = require('bluebird');
 global.window = global;
+window.location = { origin: "hacks" } // need this to avoid opaque origin error in indexeddb shim
 global.XMLHttpRequest = require('xhr2');
 global.moment = require('moment');
-global.Backbone = require('backbone');
-Backbone.sync = function(method, model, options) {
-  console.log('backbone sync', method);
-}
+global.Backbone = require('./lib/signaljs/components/backbone/backbone');
+global.Backbone.$ = require('jquery-deferred');
+
+const setGlobalIndexedDbShimVars = require('indexeddbshim');
+setGlobalIndexedDbShimVars(); // 
+
 global.btoa = function (str) {
   return new Buffer(str).toString('base64');
 };
 global.storage = require('node-persist');
+storage.initSync({ dir: 'persist' });
+global.localStorage = storage;
 global.Whisper = {};
+global.Backbone.sync = require('./lib/signaljs/components/indexeddb-backbonejs-adapter/backbone-indexeddb').sync;
+
+
+require('./lib/signaljs/database');
 var WebCryptoOSSL = require("node-webcrypto-ossl");
 global.crypto = new WebCryptoOSSL();
 
-global.indexedDB = require('indexeddb');
 global.WebSocket = require('ws');
 
 global.dcodeIO = {}
@@ -32,6 +40,10 @@ require('./lib/signaljs/registration');
 //require('./lib/signaljs/wall_clock_listener');
 require('./lib/signaljs/rotate_signed_prekey_listener');
 require('./lib/signaljs/expiring_messages');
+
+global.libphonenumber = require('./lib/signaljs/components/libphonenumber-api/libphonenumber_api-compiled');
+require('./lib/signaljs/libphonenumber-util');
+
 
 var SERVER_URL = 'https://textsecure-service-ca.whispersystems.org';
 var SERVER_PORTS = [80, 4433, 8443];
@@ -69,8 +81,6 @@ global.getAccountManager = function() {
     return accountManager;
 };
 
-
-storage.initSync();
 
 if (Whisper.Registration.isDone()) {
   extension.keepAwake();
@@ -307,7 +317,6 @@ Whisper.events.on('reconnectTimer', function() {
         owsDesktopApp.inboxView.networkStatusView.setSocketReconnectInterval(60000);
     }
 });
-
 
 getAccountManager().registerSecondDevice(
   function setProvisioningUrl(url) {
