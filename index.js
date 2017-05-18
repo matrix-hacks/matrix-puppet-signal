@@ -1,4 +1,6 @@
+const Promise = require('bluebird');
 global.window = global;
+global.XMLHttpRequest = require('xhr2');
 global.moment = require('moment');
 global.Backbone = require('backbone');
 Backbone.sync = function(method, model, options) {
@@ -313,6 +315,8 @@ getAccountManager().registerSecondDevice(
   },
   function confirmNumber(num) {
     console.log('confirm number:', num);
+    // resolve with the name you want to give it...
+    return Promise.resolve("matrix");
   },
   function incrementCounter() {
     console.log('increment counter called');
