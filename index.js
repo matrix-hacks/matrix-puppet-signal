@@ -12,12 +12,11 @@ setGlobalIndexedDbShimVars(); //
 global.btoa = function (str) {
   return new Buffer(str).toString('base64');
 };
-global.storage = require('node-persist');
-storage.initSync({ dir: 'persist' });
-global.localStorage = storage;
+const nodePersist = require('node-persist');
+nodePersist.initSync({ dir: 'persist' });
+
 global.Whisper = {};
 global.Backbone.sync = require('./lib/signaljs/components/indexeddb-backbonejs-adapter/backbone-indexeddb').sync;
-
 
 require('./lib/signaljs/database');
 var WebCryptoOSSL = require("node-webcrypto-ossl");
@@ -35,6 +34,30 @@ global._ = require('underscore');
 //require('./signaljs/components');
 require('./lib/signaljs/signal_protocol_store');
 require('./lib/signaljs/libtextsecure');
+
+
+window.textsecure.storage.impl = {
+  put: function(key, value) {
+    nodePersist.setItemSync(key, value);
+  },
+  get: function(key, defaultValue) {
+    let val = nodePersist.getItemSync(key);
+    if (typeof val === "undefined") {
+      return defaultValue;
+    } else {
+      return val;
+    }
+  },
+  remove: function(key) {
+    nodePersist.removeItemSync(key);
+  }
+}
+
+global.storage = window.textsecure.storage.impl;
+
+
+
+
 require('./lib/signaljs/models/messages');
 require('./lib/signaljs/registration');
 //require('./lib/signaljs/wall_clock_listener');
