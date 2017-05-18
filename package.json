@@ -7,6 +7,7 @@
     "bluebird": "^3.5.0",
     "bytebuffer": "^5.0.1",
     "indexeddbshim": "^3.0.0-rc.10",
+    "minimist": "^1.2.0",
     "moment": "^2.18.1",
     "node-persist": "^2.0.11",
     "node-webcrypto-ossl": "^1.0.23",

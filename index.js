@@ -5,6 +5,9 @@ global.XMLHttpRequest = require('xhr2');
 global.moment = require('moment');
 global.Backbone = require('./lib/signaljs/components/backbone/backbone');
 global.Backbone.$ = require('jquery-deferred');
+global.Event = function(type) {
+  this.type = type;
+}
 
 const setGlobalIndexedDbShimVars = require('indexeddbshim');
 setGlobalIndexedDbShimVars(); // 
@@ -12,8 +15,6 @@ setGlobalIndexedDbShimVars(); //
 global.btoa = function (str) {
   return new Buffer(str).toString('base64');
 };
-const nodePersist = require('node-persist');
-nodePersist.initSync({ dir: 'persist' });
 
 global.Whisper = {};
 global.Backbone.sync = require('./lib/signaljs/components/indexeddb-backbonejs-adapter/backbone-indexeddb').sync;
@@ -35,27 +36,40 @@ global._ = require('underscore');
 require('./lib/signaljs/signal_protocol_store');
 require('./lib/signaljs/libtextsecure');
 
+var fs = require('fs');
 
 window.textsecure.storage.impl = {
   put: function(key, value) {
-    nodePersist.setItemSync(key, value);
+    fs.writeFileSync(__dirname+'/data/'+key, textsecure.utils.jsonThing(value));
   },
   get: function(key, defaultValue) {
-    let val = nodePersist.getItemSync(key);
-    if (typeof val === "undefined") {
+    let ret;
+    try {
+      let raw = fs.readFileSync(__dirname+'/data/'+key);
+      if (typeof raw === "undefined") {
+        return defaultValue;
+      } else {
+        let val = JSON.parse(raw);
+        if (key === "signaling_key") {
+          return Buffer.from(val, 'ascii');
+        } else {
+          return val;
+        }
+      }
+    } catch (e) {
       return defaultValue;
-    } else {
-      return val;
     }
   },
   remove: function(key) {
-    nodePersist.removeItemSync(key);
+    try {
+      fs.unlinkSync(__dirname+'/data/'+key);
+    } catch (e) {
+      
+    }
   }
 }
 
 global.storage = window.textsecure.storage.impl;
-
-
 
 
 require('./lib/signaljs/models/messages');
@@ -82,7 +96,7 @@ global.getSocketStatus = function() {
 
 const EventEmitter = require('events').EventEmitter;
 
-Whisper.events = new EventEmitter();
+Whisper.events = _.clone(Backbone.Events);
 
 var accountManager;
 global.getAccountManager = function() {
@@ -92,29 +106,9 @@ global.getAccountManager = function() {
         accountManager = new textsecure.AccountManager(
             SERVER_URL, SERVER_PORTS, USERNAME, PASSWORD
         );
-        accountManager.addEventListener('registration', function() {
-            if (!Whisper.Registration.everDone()) {
-                storage.put('safety-numbers-approval', false);
-            }
-            Whisper.Registration.markDone();
-            console.log("dispatching registration event");
-            Whisper.events.trigger('registration_done');
-        });
     }
     return accountManager;
 };
-
-
-if (Whisper.Registration.isDone()) {
-  extension.keepAwake();
-  init();
-}
-
-console.log("listening for registration events");
-Whisper.events.on('registration_done', function() {
-  console.log("handling registration event");
-  init(true);
-});
 
 //Whisper.WallClockListener.init(Whisper.events);
 Whisper.RotateSignedPreKeyListener.init(Whisper.events);
@@ -125,16 +119,11 @@ global.getSyncRequest = function() {
 };
 
 function init(firstRun) {
-    global.removeEventListener('online', init);
-    if (!Whisper.Registration.isDone()) { return; }
-
     if (messageReceiver) { messageReceiver.close(); }
 
     var USERNAME = storage.get('number_id');
     var PASSWORD = storage.get('password');
-    var mySignalingKey = storage.get('signaling_key');
-
-  console.log('init', USERNAME);
+    var mySignalingKey = new Buffer(storage.get('signaling_key'));
 
     // initialize the socket and start listening for messages
     messageReceiver = new textsecure.MessageReceiver(
@@ -152,25 +141,21 @@ function init(firstRun) {
         SERVER_URL, SERVER_PORTS, USERNAME, PASSWORD
     );
 
-    if (firstRun === true && textsecure.storage.user.getDeviceId() != '1') {
-        if (!storage.get('theme-setting') && textsecure.storage.get('userAgent') === 'OWI') {
-            storage.put('theme-setting', 'ios');
-        }
-        var syncRequest = new textsecure.SyncRequest(textsecure.messaging, messageReceiver);
-        Whisper.events.trigger('contactsync:begin');
-        syncRequest.addEventListener('success', function() {
-            console.log('sync successful');
-            storage.put('synced_at', Date.now());
-            Whisper.events.trigger('contactsync');
-        });
-        syncRequest.addEventListener('timeout', function() {
-            console.log('sync timed out');
-            Whisper.events.trigger('contactsync');
-        });
-    }
+  var syncRequest = new textsecure.SyncRequest(textsecure.messaging, messageReceiver);
+  Whisper.events.trigger('contactsync:begin');
+  syncRequest.addEventListener('success', function() {
+    console.log('sync successful');
+    storage.put('synced_at', Date.now());
+    Whisper.events.trigger('contactsync');
+  });
+  syncRequest.addEventListener('timeout', function() {
+    console.log('sync timed out');
+    Whisper.events.trigger('contactsync');
+  });
 }
 
 function onContactReceived(ev) {
+  console.log('contacrt revied');
     var contactDetails = ev.contactDetails;
 
     var c = new Whisper.Conversation({
@@ -191,6 +176,7 @@ function onContactReceived(ev) {
 }
 
 function onGroupReceived(ev) {
+  console.log('grp receivped');
     var groupDetails = ev.groupDetails;
     var attributes = {
         id: groupDetails.id,
@@ -209,12 +195,14 @@ function onGroupReceived(ev) {
 }
 
 function onMessageReceived(ev) {
+  console.log('message received');
     var data = ev.data;
     var message = initIncomingMessage(data.source, data.timestamp);
     message.handleDataMessage(data.message);
 }
 
 function onSentMessage(ev) {
+  console.log('message sent');
     var now = new Date().getTime();
     var data = ev.data;
 
@@ -232,6 +220,7 @@ function onSentMessage(ev) {
 }
 
 function initIncomingMessage(source, timestamp) {
+  console.log('init incoming msg');
     var now = new Date().getTime();
 
     var message = new Whisper.Message({
@@ -250,58 +239,6 @@ function onError(ev) {
     var e = ev.error;
     console.log(e);
     console.log(e.stack);
-
-    if (e.name === 'HTTPError' && (e.code == 401 || e.code == 403)) {
-        Whisper.Registration.remove();
-        Whisper.events.trigger('unauthorized');
-        extension.install();
-        return;
-    }
-
-    if (e.name === 'HTTPError' && e.code == -1) {
-        // Failed to connect to server
-        if (navigator.onLine) {
-            console.log('retrying in 1 minute');
-            setTimeout(init, 60000);
-
-            Whisper.events.trigger('reconnectTimer');
-        } else {
-            console.log('offline');
-            messageReceiver.close();
-            global.addEventListener('online', init);
-        }
-        return;
-    }
-
-    if (ev.proto) {
-        if (e.name === 'MessageCounterError') {
-            // Ignore this message. It is likely a duplicate delivery
-            // because the server lost our ack the first time.
-            return;
-        }
-        var envelope = ev.proto;
-        var message = initIncomingMessage(envelope.source, envelope.timestamp.toNumber());
-        message.saveErrors(e).then(function() {
-            ConversationController.findOrCreatePrivateById(message.get('conversationId')).then(function(conversation) {
-                conversation.set({
-                    active_at: Date.now(),
-                    unreadCount: conversation.get('unreadCount') + 1
-                });
-
-                var conversation_timestamp = conversation.get('timestamp');
-                var message_timestamp = message.get('timestamp');
-                if (!conversation_timestamp || message_timestamp > conversation_timestamp) {
-                    conversation.set({ timestamp: message.get('sent_at') });
-                }
-                conversation.save();
-                conversation.trigger('newmessage', message);
-                conversation.notify(message);
-            });
-        });
-        return;
-    }
-
-    throw e;
 }
 
 function onReadReceipt(ev) {
@@ -317,6 +254,7 @@ function onReadReceipt(ev) {
 }
 
 function onDeliveryReceipt(ev) {
+  console.log('deliv receipt!');
     var pushMessage = ev.proto;
     var timestamp = pushMessage.timestamp.toNumber();
     console.log(
@@ -324,36 +262,42 @@ function onDeliveryReceipt(ev) {
         pushMessage.source + '.' + pushMessage.sourceDevice,
         timestamp
     );
-
-    Whisper.DeliveryReceipts.add({
-        timestamp: timestamp, source: pushMessage.source
-    });
 }
 
 Whisper.events.on('unauthorized', function() {
-    if (owsDesktopApp.inboxView) {
-        owsDesktopApp.inboxView.networkStatusView.update();
-    }
+  console.log('unauthorized!');
 });
 Whisper.events.on('reconnectTimer', function() {
-    if (owsDesktopApp.inboxView) {
-        owsDesktopApp.inboxView.networkStatusView.setSocketReconnectInterval(60000);
-    }
+  console.log('reconnect timer!');
 });
 
-getAccountManager().registerSecondDevice(
-  function setProvisioningUrl(url) {
-    console.log(url);
-  },
-  function confirmNumber(num) {
-    console.log('confirm number:', num);
-    // resolve with the name you want to give it...
-    return Promise.resolve("matrix");
-  },
-  function incrementCounter() {
-    console.log('increment counter called');
-  }
-).catch(function(err) {
-  console.log('disconnected');
-  console.log('err', err.stack);
+function linkAccount() {
+  getAccountManager().registerSecondDevice(
+    function setProvisioningUrl(url) {
+      console.log(url);
+    },
+    function confirmNumber(num) {
+      console.log('confirm number:', num);
+      // resolve with the name you want to give it...
+      return Promise.resolve("matrix");
+    }
+  ).catch(function(err) {
+    console.log('link failed!\n', err.stack);
+  });
+}
+
+const args = require('minimist')(process.argv);
+
+const [bin, script, cmd] = args._;
+
+if (cmd === "link") {
+  linkAccount();
+} else {
+  init();
+}
+
+
+process.on('unhandledRejection', function(reason, p){
+  console.log("Possibly Unhandled Rejection at: Promise ", p, " reason: ", reason);
+  // application specific logging here
 });
