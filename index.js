@@ -3,6 +3,7 @@ global.window = global;
 window.location = { origin: "hacks" } // need this to avoid opaque origin error in indexeddb shim
 global.XMLHttpRequest = require('xhr2');
 global.moment = require('moment');
+global._ = require('underscore');
 global.Backbone = require('./lib/signaljs/components/backbone/backbone');
 global.Backbone.$ = require('jquery-deferred');
 global.Event = function(type) {
@@ -17,8 +18,11 @@ global.btoa = function (str) {
 };
 
 global.Whisper = {};
+Whisper.events = _.clone(Backbone.Events);
 global.Backbone.sync = require('./lib/signaljs/components/indexeddb-backbonejs-adapter/backbone-indexeddb').sync;
 
+window.globalListeners = {}
+window.addEventListener = Whisper.events.on;
 require('./lib/signaljs/database');
 var WebCryptoOSSL = require("node-webcrypto-ossl");
 global.crypto = new WebCryptoOSSL();
@@ -30,19 +34,30 @@ dcodeIO.Long = require('./lib/signaljs/components/long/dist/Long');
 dcodeIO.ProtoBuf = require('./lib/signaljs/components/protobuf/dist/ProtoBuf');
 dcodeIO.ByteBuffer = require('./lib/signaljs/components/bytebuffer/dist/ByteBufferAB');
 
-global._ = require('underscore');
-
 //require('./signaljs/components');
 require('./lib/signaljs/signal_protocol_store');
 require('./lib/signaljs/libtextsecure');
 
 var fs = require('fs');
 
+require('mkdirp').sync(__dirname+'/data');
+
 window.textsecure.storage.impl = {
   put: function(key, value) {
     fs.writeFileSync(__dirname+'/data/'+key, textsecure.utils.jsonThing(value));
   },
   get: function(key, defaultValue) {
+
+    function toArrayBuffer(buf) {
+      var ab = new ArrayBuffer(buf.length);
+      var view = new Uint8Array(ab);
+      for (var i = 0; i < buf.length; ++i) {
+        view[i] = buf[i];
+      }
+      return ab;
+    }
+
+
     let ret;
     try {
       let raw = fs.readFileSync(__dirname+'/data/'+key);
@@ -52,6 +67,11 @@ window.textsecure.storage.impl = {
         let val = JSON.parse(raw);
         if (key === "signaling_key") {
           return Buffer.from(val, 'ascii');
+        } else if (key === "identityKey") {
+          return {
+            privKey: toArrayBuffer(Buffer.from(val.privKey, 'ascii')),
+            pubKey: toArrayBuffer(Buffer.from(val.pubKey, 'ascii'))
+          }
         } else {
           return val;
         }
@@ -70,6 +90,8 @@ window.textsecure.storage.impl = {
 }
 
 global.storage = window.textsecure.storage.impl;
+Whisper.events.trigger('storage_ready');
+
 
 
 require('./lib/signaljs/models/messages');
@@ -94,20 +116,27 @@ global.getSocketStatus = function() {
     }
 };
 
-const EventEmitter = require('events').EventEmitter;
-
-Whisper.events = _.clone(Backbone.Events);
 
 var accountManager;
 global.getAccountManager = function() {
-    if (!accountManager) {
-        var USERNAME = storage.get('number_id');
-        var PASSWORD = storage.get('password');
-        accountManager = new textsecure.AccountManager(
-            SERVER_URL, SERVER_PORTS, USERNAME, PASSWORD
-        );
-    }
-    return accountManager;
+  if (!accountManager) {
+    var USERNAME = storage.get('number_id');
+    var PASSWORD = storage.get('password');
+    accountManager = new textsecure.AccountManager(
+      SERVER_URL, SERVER_PORTS, USERNAME, PASSWORD
+    );
+    console.log('ad ev reg');
+    accountManager.addEventListener('registration', function() {
+      console.log('reg event!!!!');
+      if (!Whisper.Registration.everDone()) {
+        storage.put('safety-numbers-approval', false);
+      }
+      Whisper.Registration.markDone();
+      console.log("dispatching registration event");
+      Whisper.events.trigger('registration_done');
+    });
+  }
+  return accountManager;
 };
 
 //Whisper.WallClockListener.init(Whisper.events);
@@ -141,6 +170,7 @@ function init(firstRun) {
         SERVER_URL, SERVER_PORTS, USERNAME, PASSWORD
     );
 
+  console.log('sync request!');
   var syncRequest = new textsecure.SyncRequest(textsecure.messaging, messageReceiver);
   Whisper.events.trigger('contactsync:begin');
   syncRequest.addEventListener('success', function() {
@@ -271,9 +301,12 @@ Whisper.events.on('reconnectTimer', function() {
   console.log('reconnect timer!');
 });
 
+const qrcode = require('qrcode-terminal');
+
 function linkAccount() {
   getAccountManager().registerSecondDevice(
     function setProvisioningUrl(url) {
+      qrcode.generate(url);
       console.log(url);
     },
     function confirmNumber(num) {
@@ -290,12 +323,23 @@ const args = require('minimist')(process.argv);
 
 const [bin, script, cmd] = args._;
 
-if (cmd === "link") {
-  linkAccount();
-} else {
+//if (cmd === "link") {
+//  linkAccount();
+//} else {
+//  init();
+//}
+
+if (Whisper.Registration.everDone()) {
   init();
 }
+if (!Whisper.Registration.isDone()) {
+      linkAccount();
+}
 
+//            var store = textsecure.storage.protocol;
+//            store.getIdentityKeyPair().then(function(identityKey) {
+//              console.log('identity key', identityKey);
+//            });
 
 process.on('unhandledRejection', function(reason, p){
   console.log("Possibly Unhandled Rejection at: Promise ", p, " reason: ", reason);

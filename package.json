@@ -7,10 +7,13 @@
     "bluebird": "^3.5.0",
     "bytebuffer": "^5.0.1",
     "indexeddbshim": "^3.0.0-rc.10",
+    "jquery-deferred": "^0.3.1",
     "minimist": "^1.2.0",
+    "mkdirp": "^0.5.1",
     "moment": "^2.18.1",
     "node-persist": "^2.0.11",
     "node-webcrypto-ossl": "^1.0.23",
+    "qrcode-terminal": "^0.11.0",
     "underscore": "^1.8.3",
     "ws": "^3.0.0",
     "xhr2": "^0.1.4"
