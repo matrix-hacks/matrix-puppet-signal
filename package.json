@@ -1,0 +1,18 @@
+{
+  "name": "matrix-puppet-signal",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "@trust/webcrypto": "^0.0.2",
+    "backbone": "^1.3.3",
+    "bytebuffer": "^5.0.1",
+    "indexeddb": "^0.0.0",
+    "libsignal-protocol": "https://github.com/WhisperSystems/libsignal-protocol-javascript.git",
+    "moment": "^2.18.1",
+    "node-persist": "^2.0.11",
+    "protobufjs": "^6.7.3",
+    "underscore": "^1.8.3",
+    "ws": "^3.0.0"
+  }
+}
