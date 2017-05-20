@@ -1,5 +1,7 @@
 # signal-bridge
 
+**WIP** untested!!
+
 This is a Matrix bridge for WhisperSystems' Signal
 
 It works through a dirty port of the [Signal Chrome App](https://github.com/WhisperSystems/Signal-Desktop) to Node.js, which serves as the client. You can find that in the `src` directory.
