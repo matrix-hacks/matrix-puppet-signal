@@ -6,9 +6,12 @@ It works through a dirty port of the [Signal Chrome App](https://github.com/Whis
 
 ## features
 
-- [x] bidirectional direct text messaging
-
-Nothing else is tested
+- [x] Signal to Matrix direct text message
+- [x] Matrix to Signal direct text message
+- [x] Signal to Matrix direct image attachment message
+- [ ] Matrix to Signal direct image attachment message
+- [ ] group messaging
+- [ ] read receipts
 
 ## requirements
 
