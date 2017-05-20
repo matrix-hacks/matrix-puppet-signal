@@ -20,37 +20,53 @@ class App extends MatrixPuppetBridgeBase {
     return "Signal";
   }
   initThirdPartyClient() {
-    console.log('startup');
     this.client = new SignalClient("matrix");
-    this.allowNullSenderName = true;
 
     this.client.on('message', (data) => {
-      const { source, message: { body } } = data;
-      const payload = {
+      const { source, message } = data;
+      this.handleSignalMessage({
         roomId: source,
         senderId: source,
-        text: body
-      };
-      debug(payload);
-      return this.handleThirdPartyRoomMessage(payload);
+        senderName: source,
+      }, message);
     });
 
     this.client.on('sent', data => {
-      const { destination, message: { body } } = data;
-      const payload = {
+      const { destination, message } = data;
+      this.handleSignalMessage({
         roomId: destination,
         senderId: undefined,
-        text: body
-      };
-      debug(payload);
-      return this.handleThirdPartyRoomMessage(payload);
+        senderName: destination,
+      }, message);
     });
 
     return this.client.start();
   }
+  handleSignalMessage(payload, message) {
+    if ( message.body ) {
+      payload.text = message.body
+    }
+    if ( message.attachments.length === 0 ) {
+      return this.handleThirdPartyRoomMessage(payload);
+    } else {
+      // TODO handle array of attachments!
+      // XXX only takes first one now.
+      let att = message.attachments[0];
+      payload.buffer = new Buffer(att.data);
+      payload.mimetype = att.contentType;
+      if ( message.attachments.length > 1 ) {
+        this.sendStatusMsg({}, "dont know how to handle more than one attachment! ignored all but the first one.");
+      }
+      if ( payload.mimetype.match(/^image/) ) {
+        return this.handleThirdPartyRoomImageMessage(payload);
+      } else {
+        return this.sendStatusMsg({}, "dont know how to deal with filetype", payload);
+      }
+    }
+  }
   getThirdPartyRoomDataById(phoneNumber) {
     return Promise.resolve({
-      name: phoneNumber,
+      name: '',
       topic: "Signal Direct Message"
     })
   }

@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "license": "MIT",
+  "scripts": {
+    "start": "DEBUG=matrix-puppet:* node index.js"
+  },
   "dependencies": {
     "bluebird": "^3.5.0",
     "bytebuffer": "^5.0.1",
