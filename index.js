@@ -20,11 +20,11 @@ class App extends MatrixPuppetBridgeBase {
     return "Signal";
   }
   initThirdPartyClient() {
-    const client = this.client = new SignalClient("matrix");
-
+    console.log('startup');
+    this.client = new SignalClient("matrix");
     this.allowNullSenderName = true;
 
-    client.on('message', (data) => {
+    this.client.on('message', (data) => {
       const { source, message: { body } } = data;
       const payload = {
         roomId: source,
@@ -35,7 +35,7 @@ class App extends MatrixPuppetBridgeBase {
       return this.handleThirdPartyRoomMessage(payload);
     });
 
-    client.on('sent', data => {
+    this.client.on('sent', data => {
       const { destination, message: { body } } = data;
       const payload = {
         roomId: destination,
@@ -46,10 +46,19 @@ class App extends MatrixPuppetBridgeBase {
       return this.handleThirdPartyRoomMessage(payload);
     });
 
-    return Promise.resolve();
+    return this.client.start();
+  }
+  getThirdPartyRoomDataById(phoneNumber) {
+    return Promise.resolve({
+      name: phoneNumber,
+      topic: "Signal Direct Message"
+    })
+  }
+  sendReadReceiptAsPuppetToThirdPartyRoomWithId() {
+    // no-op for now
   }
   sendMessageAsPuppetToThirdPartyRoomWithId(id, text) {
-    return this.thirdPartyClient.sendMessage(id, text);
+    return this.client.sendMessage(id, text);
   }
 }
 
@@ -71,9 +80,11 @@ new Cli({
   },
   run: function(port) {
     const app = new App(config, puppet);
+    console.log('starting matrix client');
     return puppet.startClient().then(()=>{
+      console.log('starting signal client');
       return app.initThirdPartyClient();
-    }).then(() => {
+    }).then(()=>{
       return app.bridge.run(port, config);
     }).then(()=>{
       console.log('Matrix-side listening on port %s', port);

@@ -238,58 +238,67 @@ Whisper.events.on('reconnectTimer', function() {
   console.log('reconnect timer!');
 });
 
+
+const startSequence = (clientName, emitter) => {
+
+  const link = () => {
+    return getAccountManager().registerSecondDevice(
+      (url)=> qrcode.generate(url),
+      ()=> Promise.resolve(clientName)
+    );
+  }
+
+  const init = () => {
+    if (messageReceiver) { messageReceiver.close(); }
+
+    var USERNAME = storage.get('number_id');
+    var PASSWORD = storage.get('password');
+    var mySignalingKey = new Buffer(storage.get('signaling_key'));
+
+    // initialize the socket and start listening for messages
+    messageReceiver = new textsecure.MessageReceiver(
+      SERVER_URL, SERVER_PORTS, USERNAME, PASSWORD, mySignalingKey
+    );
+
+    [
+      'message', // triggered when you receive a message on signal
+      'sent', // triggered when a sent message synced from another client
+    ].forEach((type) => {
+      messageReceiver.addEventListener(type, ({data})=>emitter.emit(type, data));
+    });
+
+    messageReceiver.addEventListener('receipt', onDeliveryReceipt);
+    messageReceiver.addEventListener('contact', onContactReceived);
+    messageReceiver.addEventListener('group', onGroupReceived);
+    messageReceiver.addEventListener('read', onReadReceipt);
+    messageReceiver.addEventListener('error', onError);
+
+    global.textsecure.messaging = new textsecure.MessageSender(
+      SERVER_URL, SERVER_PORTS, USERNAME, PASSWORD
+    );
+
+    return Promise.resolve(emitter);
+  }
+
+  return { link, init };
+}
+
 const EventEmitter = require('events').EventEmitter;
 
 class SignalClient extends EventEmitter {
   constructor(clientName="nodejs") {
     super();
-    this.id = null;
+    this.clientName = clientName;
+  }
 
-    const link = () => {
-      return getAccountManager().registerSecondDevice(
-        (url)=> qrcode.generate(url),
-        ()=> clientName
-      ).catch(function(err) {
-        console.log('link failed!\n', err.stack);
-      });
-    }
+  start() {
+    if (messageReceiver)
+      return Promise.resolve(this);
 
-    const init = () => {
-      if (messageReceiver) { messageReceiver.close(); }
-
-      var USERNAME = storage.get('number_id');
-      var PASSWORD = storage.get('password');
-      var mySignalingKey = new Buffer(storage.get('signaling_key'));
-
-      this.id = USERNAME;
-
-      // initialize the socket and start listening for messages
-      messageReceiver = new textsecure.MessageReceiver(
-        SERVER_URL, SERVER_PORTS, USERNAME, PASSWORD, mySignalingKey
-      );
-
-      [
-        'message', // triggered when you receive a message on signal
-        'sent', // triggered when a sent message synced from another client
-      ].forEach((type) => {
-        messageReceiver.addEventListener(type, ({data})=>this.emit(type, data));
-      });
-
-      messageReceiver.addEventListener('receipt', onDeliveryReceipt);
-      messageReceiver.addEventListener('contact', onContactReceived);
-      messageReceiver.addEventListener('group', onGroupReceived);
-      messageReceiver.addEventListener('read', onReadReceipt);
-      messageReceiver.addEventListener('error', onError);
-
-      global.textsecure.messaging = new textsecure.MessageSender(
-        SERVER_URL, SERVER_PORTS, USERNAME, PASSWORD
-      );
-
-      return Promise.resolve(messageReceiver);
-    }
+    const { link, init } = startSequence(this.clientName, this); 
 
     if (Whisper.Registration.everDone()) {
-      init();
+      return init();
     }
     if (!Whisper.Registration.isDone()) {
       return link().then(() => init());
@@ -313,20 +322,3 @@ class SignalClient extends EventEmitter {
 }
 
 module.exports = SignalClient;
-
-if (!module.parent) {
-  let client = new SignalClient("matrix");
-  client.on('message', data => {
-    console.log(">>>message", data);
-    console.log(">>>my id", client.id);
-  });
-
-  client.on('sent', data => {
-    console.log(">>>sent", data);
-    console.log(">>>my id", client.id);
-  });
-
-  //setTimeout(function() {
-  //  client.sendMessage("+19498875144", "Does this cause sent trigger or what");
-  //}, 2000);
-}
