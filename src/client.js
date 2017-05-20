@@ -326,7 +326,7 @@ if (!module.parent) {
     console.log(">>>my id", client.id);
   });
 
-  setTimeout(function() {
-    client.sendMessage("+19498875144", "Does this cause sent trigger or what");
-  }, 2000);
+  //setTimeout(function() {
+  //  client.sendMessage("+19498875144", "Does this cause sent trigger or what");
+  //}, 2000);
 }
