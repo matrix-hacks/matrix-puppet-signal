@@ -11,7 +11,7 @@
     "bytebuffer": "^5.0.1",
     "indexeddbshim": "^3.0.0-rc.10",
     "jquery-deferred": "^0.3.1",
-    "matrix-puppet-bridge": "^1.14.1",
+    "matrix-puppet-bridge": "^1.14.2",
     "mkdirp": "^0.5.1",
     "moment": "^2.18.1",
     "node-persist": "^2.0.11",
