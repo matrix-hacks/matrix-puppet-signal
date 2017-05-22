@@ -5,8 +5,7 @@ const {
   Puppet,
   MatrixPuppetBridgeBase
 } = require("matrix-puppet-bridge");
-const Promise = require('bluebird');
-const SignalClient = require('./src/client');
+const SignalClient = require('signal-client');
 const config = require('./config.json');
 const path = require('path');
 const puppet = new Puppet(path.join(__dirname, './config.json' ));
@@ -22,8 +21,8 @@ class App extends MatrixPuppetBridgeBase {
   initThirdPartyClient() {
     this.client = new SignalClient("matrix");
 
-    this.client.on('message', (data) => {
-      const { source, message } = data;
+    this.client.on('message', (ev) => {
+      const { source, message } = ev.data;
       this.handleSignalMessage({
         roomId: source,
         senderId: source,
@@ -31,8 +30,8 @@ class App extends MatrixPuppetBridgeBase {
       }, message);
     });
 
-    this.client.on('sent', data => {
-      const { destination, message } = data;
+    this.client.on('sent', (ev) => {
+      const { destination, message } = ev.data;
       this.handleSignalMessage({
         roomId: destination,
         senderId: undefined,
