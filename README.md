@@ -2,7 +2,7 @@
 
 This is a Matrix bridge for Signal, the secure messenger app by Open Whisper Systems.
 
-It works through a dirty port of the [Signal Chrome App](https://github.com/WhisperSystems/Signal-Desktop) to Node.js, which serves as the client. You can find that here: https://github.com/kfatehi/node-signal-client
+It works through a dirty port of the [Signal Chrome App](https://github.com/WhisperSystems/Signal-Desktop) to Node.js, which serves as the client. You can find that here: https://github.com/matrix-hacks/node-signal-client
 
 ## features
 
