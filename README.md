@@ -35,6 +35,15 @@ You should see your camera preview open up.
 
 In the terminal, run `npm run link` and you should soon see a giant QR code. Scan that with Signal.
 
+If this throws an error, check the debug log for [this problem](https://github.com/matrix-hacks/matrix-puppet-signal/issues/8). If you're having this issue, npm did not completely install [signal-desktop](https://github.com/signalapp/Signal-Desktop), a dependency of a dependency. This happens because, at least in some npm versions, git repositories' git submodules are ignored. To install it manually, using git, run:
+```bash
+cd node_modules
+rm -rf signal-desktop
+git clone "https://github.com/signalapp/Signal-Desktop.git"
+cd signal-desktop
+git checkout v0.39.0
+```
+
 If you get an error, restart the node process so that you can try with a different QR (it may have expired).
 
 If you ever need to unlink it and cleanup the data and keys, run `npm run clean`.
