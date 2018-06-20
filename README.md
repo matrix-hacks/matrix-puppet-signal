@@ -39,7 +39,7 @@ If this throws an error, check the debug log for [this problem](https://github.c
 ```bash
 cd node_modules
 rm -rf signal-desktop
-git clone "https://github.com/signalapp/Signal-Desktop.git"
+git clone "https://github.com/signalapp/Signal-Desktop.git" signal-desktop
 cd signal-desktop
 git checkout v0.39.0
 ```
