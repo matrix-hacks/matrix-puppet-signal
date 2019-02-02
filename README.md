@@ -1,4 +1,4 @@
-# signal-bridge
+# signal-bridge [![#matrix-puppet-bridge:matrix.org](https://img.shields.io/matrix/matrix-puppet-bridge:matrix.org.svg?label=%23matrix-puppet-bridge%3Amatrix.org&logo=matrix&server_fqdn=matrix.org)](https://matrix.to/#/#matrix-puppet-bridge:matrix.org)
 
 This is a Matrix bridge for Signal, the secure messenger app by Open Whisper Systems.
 
@@ -69,7 +69,7 @@ Restart your HS.
 
 ## Discussion, Help and Support
 
-Join us in [the Matrix Puppet Bridge room](https://riot.im/app/#/room/#matrix-puppet-bridge:matrix.org)
+Join us in the [![Matrix Puppet Bridge](https://user-images.githubusercontent.com/13843293/52007839-4b2f6580-24c7-11e9-9a6c-14d8fc0d0737.png)](https://matrix.to/#/#matrix-puppet-bridge:matrix.org) room
 
 # TODO
 * Be able to originate conversations from the Matrix side.
