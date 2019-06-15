@@ -48,19 +48,17 @@ class App extends MatrixPuppetBridgeBase {
     if ( message.attachments.length === 0 ) {
       return this.handleThirdPartyRoomMessage(payload);
     } else {
-      // TODO handle array of attachments!
-      // XXX only takes first one now.
-      let att = message.attachments[0];
-      payload.buffer = new Buffer(att.data);
-      payload.mimetype = att.contentType;
-      if ( message.attachments.length > 1 ) {
-        this.sendStatusMsg({}, "dont know how to handle more than one attachment! ignored all but the first one.");
+      for ( let i = 0; i < message.attachments.length; i++ ) {
+        let att = message.attachments[i];
+	payload.buffer = new Buffer(att.data);
+	payload.mimetype = att.contentType;
+	if ( payload.mimetype.match(/^image/) ) {
+	  this.handleThirdPartyRoomImageMessage(payload);
+	} else {
+	  this.sendStatusMsg({}, "dont know how to deal with filetype", payload);
+	}
       }
-      if ( payload.mimetype.match(/^image/) ) {
-        return this.handleThirdPartyRoomImageMessage(payload);
-      } else {
-        return this.sendStatusMsg({}, "dont know how to deal with filetype", payload);
-      }
+      return true;
     }
   }
   getThirdPartyRoomDataById(phoneNumber) {
