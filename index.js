@@ -87,6 +87,7 @@ new Cli({
       reg.setAppServiceToken(AppServiceRegistration.generateToken());
       reg.setSenderLocalpart("signalbot");
       reg.addRegexPattern("users", "@signal_.*", true);
+      reg.addRegexPattern("aliases", "#signal_.*", true);
       callback(reg);
     }).catch(err=>{
       console.error(err.message);
