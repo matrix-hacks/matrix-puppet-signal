@@ -23,8 +23,11 @@ class App extends MatrixPuppetBridgeBase {
 
     this.client.on('message', (ev) => {
       const { source, message } = ev.data;
+      let room = source;
+      if ( message.group != null)
+        room = message.group.id;
       this.handleSignalMessage({
-        roomId: source,
+        roomId: room,
         senderId: source,
         senderName: source,
       }, message);

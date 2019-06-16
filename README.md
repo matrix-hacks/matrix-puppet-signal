@@ -11,7 +11,8 @@ It works through a dirty port of the [Signal Chrome App](https://github.com/Whis
 - [x] Matrix to Signal direct text message
 - [x] Signal to Matrix direct image attachment message
 - [ ] Matrix to Signal direct image attachment message
-- [ ] group messaging
+- [x] group messaging (recieve)
+- [ ] group messaging (send)
 - [ ] read receipts
 - [ ] contact list syncing
 
