@@ -3,7 +3,8 @@ const {
     Cli, AppServiceRegistration
   },
   Puppet,
-  MatrixPuppetBridgeBase
+  MatrixPuppetBridgeBase,
+  utils: { download }
 } = require("matrix-puppet-bridge");
 const SignalClient = require('signal-client');
 const config = require('./config.json');
@@ -23,8 +24,11 @@ class App extends MatrixPuppetBridgeBase {
 
     this.client.on('message', (ev) => {
       const { source, message } = ev.data;
+      let room = source;
+      if ( message.group != null)
+        room = message.group.id;
       this.handleSignalMessage({
-        roomId: source,
+        roomId: room,
         senderId: source,
         senderName: source,
       }, message);
@@ -38,6 +42,10 @@ class App extends MatrixPuppetBridgeBase {
         senderName: destination,
       }, message);
     });
+
+this.client.on('group', (ev)=>{
+  console.log('group received', ev.groupDetails);
+});
 
     return this.client.start();
   }
@@ -70,8 +78,37 @@ class App extends MatrixPuppetBridgeBase {
   sendReadReceiptAsPuppetToThirdPartyRoomWithId() {
     // no-op for now
   }
+  
+  sendImageMessageAsPuppetToThirdPartyRoomWithId(id, data) {
+    return download.getTempfile(data.url, { tagFilename: true }).then(({path}) => {
+      const img = path;
+      let fs = require('fs');
+      let image = fs.readFileSync(img);
+      return this.client.sendMessage( id, data.text, [{contentType : data.mimetype, size : data.size, data : image} ] );
+    });  
+  }
+
+stringToArrayBuffer(str) {
+    if (typeof str !== 'string') {
+        throw new Error('Passed non-string to stringToArrayBuffer');
+    }
+    var res = new ArrayBuffer(str.length);
+    var uint = new Uint8Array(res);
+    for (var i = 0; i < str.length; i++) {
+        uint[i] = str.charCodeAt(i);
+    }
+    return res;
+}
+
   sendMessageAsPuppetToThirdPartyRoomWithId(id, text) {
-    return this.client.sendMessage(id, text);
+console.log(this.client.syncGroups());
+console.log(id);
+    if ( id.match(/^÷/) ) {
+      console.log("sending to group");
+      return this.client.sendMessageToGroup(this.stringToArrayBuffer(id), text);
+    } else {
+      return this.client.sendMessage(id, text);
+    }
   }
 }
 
