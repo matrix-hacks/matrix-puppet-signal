@@ -95,7 +95,10 @@ this.client.on('group', (ev)=>{
       const img = path;
       let fs = require('fs');
       let image = fs.readFileSync(img);
-      return this.client.sendMessage( id, data.text, [{contentType : data.mimetype, size : data.size, data : image} ] );
+      if(this.groups.has(id))
+        return this.client.sendMessageToGroup( id, data.text, [{contentType : data.mimetype, size : data.size, data : image} ] );
+      else
+        return this.client.sendMessage( id, data.text, [{contentType : data.mimetype, size : data.size, data : image} ] );
     });  
   }
 
