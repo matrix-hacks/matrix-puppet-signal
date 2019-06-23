@@ -42,11 +42,16 @@ class App extends MatrixPuppetBridgeBase {
       }, message);
     });
 	
-	this.client.on('group', async (ev) => {
-        let id = ev.groupDetails.id;
-        let name = ev.groupDetails.name.replace(/\s/g, '_');
-		console.log(ev);
-	});
+    this.groups = new Map(); // abstract storage for groups
+    // triggered when we run syncGroups
+    this.client.on('group', (ev) => {
+      console.log('group received', ev.groupDetails);
+      let id = ev.groupDetails.id;
+      let name = ev.groupDetails.name.replace(/\s/g, '_');
+      this.groups.set(id, name);
+    });
+	
+    setTimeout(this.client.syncGroups, 5000); // request for sync groups 
 
     return this.client.start();
   }
@@ -80,9 +85,12 @@ class App extends MatrixPuppetBridgeBase {
     // no-op for now
   }
   sendMessageAsPuppetToThirdPartyRoomWithId(id, text) {
-	this.client.syncGroups();
-    return this.client.sendMessage(id, text);
+    if(this.groups.has(id))
+      return this.client.sendMessageToGroup(id, text);
+    else
+      return this.client.sendMessage(id, text);
   }
+  
 }
 
 new Cli({
