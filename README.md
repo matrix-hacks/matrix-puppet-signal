@@ -14,7 +14,7 @@ It works through a dirty port of the [Signal Chrome App](https://github.com/Whis
 - [x] group messaging (recieve)
 - [x] group messaging (send)
 - [ ] read receipts
-- [ ] contact list syncing
+- [x] contact list syncing
 
 ## requirements
 

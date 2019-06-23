@@ -52,11 +52,14 @@ class App extends MatrixPuppetBridgeBase {
       this.groups.set(id, name);
     });
 	
+	this.contacts = new Map();
+    this.client.on('contact', (ev) => {
+      console.log('contact received', ev.contactDetails);
+      this.contacts.set(ev.contactDetails.number, ev.contactDetails.name);
+    });
+	
     setTimeout(this.client.syncGroups, 5000); // request for sync groups 
-
-this.client.on('group', (ev)=>{
-  console.log('group received', ev.groupDetails);
-});
+    setTimeout(this.client.syncContacts, 10000); // request for sync contacts
 
     return this.client.start();
   }
@@ -69,22 +72,28 @@ this.client.on('group', (ev)=>{
     } else {
       for ( let i = 0; i < message.attachments.length; i++ ) {
         let att = message.attachments[i];
-	payload.buffer = new Buffer(att.data);
-	payload.mimetype = att.contentType;
-	if ( payload.mimetype.match(/^image/) ) {
-	  this.handleThirdPartyRoomImageMessage(payload);
-	} else {
-	  this.sendStatusMsg({}, "dont know how to deal with filetype", payload);
-	}
+		payload.buffer = new Buffer(att.data);
+		payload.mimetype = att.contentType;
+		if ( payload.mimetype.match(/^image/) ) {
+		  this.handleThirdPartyRoomImageMessage(payload);
+		} else {
+		  this.sendStatusMsg({}, "dont know how to deal with filetype", payload);
+		}
       }
       return true;
     }
   }
-  getThirdPartyRoomDataById(phoneNumber) {
+  getThirdPartyRoomDataById(id) {
+    let name = this.contacts.get(id);
+    if ( !name ) 
+      name = this.groups.get(id);
     return Promise.resolve({
-      name: '',
+      name: name,
       topic: "Signal Direct Message"
     })
+  }
+  getThirdPartyUserDataById(id) {
+    return this.contacts.get(id);
   }
   sendReadReceiptAsPuppetToThirdPartyRoomWithId() {
     // no-op for now
