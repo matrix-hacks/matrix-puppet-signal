@@ -23,7 +23,7 @@ class App extends MatrixPuppetBridgeBase {
     this.client = new SignalClient("matrix");
 
     this.client.on('message', (ev) => {
-      const { source, message } = ev.data;
+      const { source, message, timestamp } = ev.data;
       let room = source;
       if ( message.group != null)
         room = message.group.id;
@@ -31,16 +31,16 @@ class App extends MatrixPuppetBridgeBase {
         roomId: room,
         senderId: source,
         senderName: source,
-      }, message);
+      }, message, timestamp);
     });
 
     this.client.on('sent', (ev) => {
-      const { destination, message } = ev.data;
+      const { destination, message, timestamp } = ev.data;
       this.handleSignalMessage({
         roomId: destination,
         senderId: undefined,
         senderName: destination,
-      }, message);
+      }, message, timestamp);
     });
 	
     this.groups = new Map(); // abstract storage for groups
@@ -58,9 +58,12 @@ this.client.on('group', (ev)=>{
   console.log('group received', ev.groupDetails);
 });
 
+    this.history = [];
+
     return this.client.start();
   }
-  handleSignalMessage(payload, message) {
+  handleSignalMessage(payload, message, timestamp) {
+    this.history.push({sender: payload.senderId, timestamp: new Date(timestamp).getTime()});
     if ( message.body ) {
       payload.text = message.body
     }
@@ -86,8 +89,18 @@ this.client.on('group', (ev)=>{
       topic: "Signal Direct Message"
     })
   }
-  sendReadReceiptAsPuppetToThirdPartyRoomWithId() {
-    // no-op for now
+  sendReadReceiptAsPuppetToThirdPartyRoomWithId(id) {
+    let r = [];
+console.log(this.history[0])
+    for(let i = 0; i < this.history.length; i++) {
+      if(this.history[i].sender == id) {
+        r.push(this.history[i]);
+        this.history.splice(i, 1);
+        i--;
+      }
+    }
+    console.log("sending " + r.length + "receipts");
+    return this.client.markRead(r);
   }
   
   sendImageMessageAsPuppetToThirdPartyRoomWithId(id, data) {
