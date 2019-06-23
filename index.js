@@ -23,7 +23,7 @@ class App extends MatrixPuppetBridgeBase {
     this.client = new SignalClient("matrix");
 
     this.client.on('message', (ev) => {
-      const { source, message } = ev.data;
+      const { source, message, timestamp } = ev.data;
       let room = source;
       if ( message.group != null)
         room = message.group.id;
@@ -31,16 +31,16 @@ class App extends MatrixPuppetBridgeBase {
         roomId: room,
         senderId: source,
         senderName: source,
-      }, message);
+      }, message, timestamp);
     });
 
     this.client.on('sent', (ev) => {
-      const { destination, message } = ev.data;
+      const { destination, message, timestamp } = ev.data;
       this.handleSignalMessage({
         roomId: destination,
         senderId: undefined,
         senderName: destination,
-      }, message);
+      }, message, timestamp);
     });
 	
     this.groups = new Map(); // abstract storage for groups
@@ -61,9 +61,12 @@ class App extends MatrixPuppetBridgeBase {
     setTimeout(this.client.syncGroups, 5000); // request for sync groups 
     setTimeout(this.client.syncContacts, 10000); // request for sync contacts
 
+    this.history = [];
+
     return this.client.start();
   }
-  handleSignalMessage(payload, message) {
+  handleSignalMessage(payload, message, timestamp) {
+    this.history.push({sender: payload.senderId, timestamp: new Date(timestamp).getTime()});
     if ( message.body ) {
       payload.text = message.body
     }
@@ -92,11 +95,17 @@ class App extends MatrixPuppetBridgeBase {
       topic: "Signal Direct Message"
     })
   }
-  getThirdPartyUserDataById(id) {
-    return this.contacts.get(id);
-  }
-  sendReadReceiptAsPuppetToThirdPartyRoomWithId() {
-    // no-op for now
+  sendReadReceiptAsPuppetToThirdPartyRoomWithId(id) {
+    let r = [];
+    for(let i = 0; i < this.history.length; i++) {
+      if(this.history[i].sender == id) {
+        r.push(this.history[i]);
+        this.history.splice(i, 1);
+        i--;
+      }
+    }
+    console.log("sending " + r.length + "receipts");
+    return this.client.markRead(r);
   }
   
   sendImageMessageAsPuppetToThirdPartyRoomWithId(id, data) {
