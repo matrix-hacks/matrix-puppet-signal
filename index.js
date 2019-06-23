@@ -42,6 +42,17 @@ class App extends MatrixPuppetBridgeBase {
         senderName: destination,
       }, message);
     });
+	
+    this.groups = new Map(); // abstract storage for groups
+    // triggered when we run syncGroups
+    this.client.on('group', (ev) => {
+      console.log('group received', ev.groupDetails);
+      let id = ev.groupDetails.id;
+      let name = ev.groupDetails.name.replace(/\s/g, '_');
+      this.groups.set(id, name);
+    });
+	
+    setTimeout(this.client.syncGroups, 5000); // request for sync groups 
 
 this.client.on('group', (ev)=>{
   console.log('group received', ev.groupDetails);
@@ -84,31 +95,18 @@ this.client.on('group', (ev)=>{
       const img = path;
       let fs = require('fs');
       let image = fs.readFileSync(img);
-      return this.client.sendMessage( id, data.text, [{contentType : data.mimetype, size : data.size, data : image} ] );
+      if(this.groups.has(id))
+        return this.client.sendMessageToGroup( id, data.text, [{contentType : data.mimetype, size : data.size, data : image} ] );
+      else
+        return this.client.sendMessage( id, data.text, [{contentType : data.mimetype, size : data.size, data : image} ] );
     });  
   }
 
-stringToArrayBuffer(str) {
-    if (typeof str !== 'string') {
-        throw new Error('Passed non-string to stringToArrayBuffer');
-    }
-    var res = new ArrayBuffer(str.length);
-    var uint = new Uint8Array(res);
-    for (var i = 0; i < str.length; i++) {
-        uint[i] = str.charCodeAt(i);
-    }
-    return res;
-}
-
   sendMessageAsPuppetToThirdPartyRoomWithId(id, text) {
-console.log(this.client.syncGroups());
-console.log(id);
-    if ( id.match(/^÷/) ) {
-      console.log("sending to group");
-      return this.client.sendMessageToGroup(this.stringToArrayBuffer(id), text);
-    } else {
+    if(this.groups.has(id))
+      return this.client.sendMessageToGroup(id, text);
+    else
       return this.client.sendMessage(id, text);
-    }
   }
 }
 
