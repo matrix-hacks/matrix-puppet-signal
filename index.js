@@ -3,7 +3,8 @@ const {
     Cli, AppServiceRegistration
   },
   Puppet,
-  MatrixPuppetBridgeBase
+  MatrixPuppetBridgeBase,
+  utils: { download }
 } = require("matrix-puppet-bridge");
 const SignalClient = require('signal-client');
 const config = require('./config.json');
@@ -53,6 +54,10 @@ class App extends MatrixPuppetBridgeBase {
 	
     setTimeout(this.client.syncGroups, 5000); // request for sync groups 
 
+this.client.on('group', (ev)=>{
+  console.log('group received', ev.groupDetails);
+});
+
     return this.client.start();
   }
   handleSignalMessage(payload, message) {
@@ -84,13 +89,22 @@ class App extends MatrixPuppetBridgeBase {
   sendReadReceiptAsPuppetToThirdPartyRoomWithId() {
     // no-op for now
   }
+  
+  sendImageMessageAsPuppetToThirdPartyRoomWithId(id, data) {
+    return download.getTempfile(data.url, { tagFilename: true }).then(({path}) => {
+      const img = path;
+      let fs = require('fs');
+      let image = fs.readFileSync(img);
+      return this.client.sendMessage( id, data.text, [{contentType : data.mimetype, size : data.size, data : image} ] );
+    });  
+  }
+
   sendMessageAsPuppetToThirdPartyRoomWithId(id, text) {
     if(this.groups.has(id))
       return this.client.sendMessageToGroup(id, text);
     else
       return this.client.sendMessage(id, text);
   }
-  
 }
 
 new Cli({

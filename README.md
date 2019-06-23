@@ -10,7 +10,7 @@ It works through a dirty port of the [Signal Chrome App](https://github.com/Whis
 - [x] Signal to Matrix direct text message
 - [x] Matrix to Signal direct text message
 - [x] Signal to Matrix direct image attachment message
-- [ ] Matrix to Signal direct image attachment message
+- [x] Matrix to Signal direct image attachment message
 - [x] group messaging (recieve)
 - [x] group messaging (send)
 - [ ] read receipts
