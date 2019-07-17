@@ -9,10 +9,12 @@ It works through a dirty port of the [Signal Chrome App](https://github.com/Whis
 - [x] Linking as a second device
 - [x] Signal to Matrix direct text message
 - [x] Matrix to Signal direct text message
-- [x] Signal to Matrix direct image attachment message
-- [x] Matrix to Signal direct image attachment message
-- [x] group messaging (recieve)
-- [x] group messaging (send)
+- [x] Signal to Matrix group text message
+- [x] Matrix to Signal group text message
+- [x] Signal to Matrix image attachment message
+- [x] Matrix to Signal image attachment message
+- [x] Signal to Matrix file attachment message
+- [x] Matrix to Signal file attachment message
 - [x] contact list syncing
 - [x] read receipts
 

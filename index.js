@@ -11,6 +11,7 @@ const config = require('./config.json');
 const path = require('path');
 const puppet = new Puppet(path.join(__dirname, './config.json' ));
 const debug = require('debug')('matrix-puppet:signal');
+let fs = require('fs');
 
 class App extends MatrixPuppetBridgeBase {
   getServicePrefix() {
@@ -110,9 +111,12 @@ class App extends MatrixPuppetBridgeBase {
   }
   
   sendImageMessageAsPuppetToThirdPartyRoomWithId(id, data) {
+    return this.sendFileMessageAsPuppetToThirdPartyRoomWithId(id, data);
+  }
+
+  sendFileMessageAsPuppetToThirdPartyRoomWithId(id, data) {
     return download.getTempfile(data.url, { tagFilename: true }).then(({path}) => {
       const img = path;
-      let fs = require('fs');
       let image = fs.readFileSync(img);
       if(this.groups.has(id)) {
         return this.client.sendMessageToGroup( id, data.text, [{contentType : data.mimetype, size : data.size, data : image} ] );
