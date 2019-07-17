@@ -10,6 +10,6 @@
   },
   "dependencies": {
     "matrix-puppet-bridge": "matrix-hacks/matrix-puppet-bridge#c16ac9f",
-    "signal-client": "^1.0.4"
+    "signal-client": "nr23730/node-signal-client"
   }
 }
