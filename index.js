@@ -75,21 +75,22 @@ class App extends MatrixPuppetBridgeBase {
     } else {
       for ( let i = 0; i < message.attachments.length; i++ ) {
         let att = message.attachments[i];
-		payload.buffer = new Buffer(att.data);
-		payload.mimetype = att.contentType;
-		if ( payload.mimetype.match(/^image/) ) {
-		  this.handleThirdPartyRoomImageMessage(payload);
-		} else {
-		  this.sendStatusMsg({}, "dont know how to deal with filetype", payload);
-		}
+		    payload.buffer = new Buffer(att.data);
+		    payload.mimetype = att.contentType;
+		    if ( payload.mimetype.match(/^image/) ) {
+		      this.handleThirdPartyRoomImageMessage(payload);
+		    } else {
+		      this.sendStatusMsg({}, "dont know how to deal with filetype", payload);
+		    }
       }
       return true;
     }
   }
   getThirdPartyRoomDataById(id) {
     let name = this.contacts.get(id);
-    if ( !name ) 
+    if ( !name ) {
       name = this.groups.get(id);
+    }
     return Promise.resolve({
       name: name,
       topic: "Signal Direct Message"
@@ -113,18 +114,20 @@ class App extends MatrixPuppetBridgeBase {
       const img = path;
       let fs = require('fs');
       let image = fs.readFileSync(img);
-      if(this.groups.has(id))
+      if(this.groups.has(id)) {
         return this.client.sendMessageToGroup( id, data.text, [{contentType : data.mimetype, size : data.size, data : image} ] );
-      else
+      } else {
         return this.client.sendMessage( id, data.text, [{contentType : data.mimetype, size : data.size, data : image} ] );
+      }
     });  
   }
 
   sendMessageAsPuppetToThirdPartyRoomWithId(id, text) {
-    if(this.groups.has(id))
+    if(this.groups.has(id)) {
       return this.client.sendMessageToGroup(id, text);
-    else
+    } else {
       return this.client.sendMessage(id, text);
+    }
   }
 }
 
