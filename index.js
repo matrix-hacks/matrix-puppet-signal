@@ -31,7 +31,6 @@ class App extends MatrixPuppetBridgeBase {
       this.handleSignalMessage({
         roomId: room,
         senderId: source,
-        senderName: source,
       }, message, timestamp);
     });
 
@@ -53,10 +52,15 @@ class App extends MatrixPuppetBridgeBase {
       this.groups.set(id, name);
     });
 	
-	this.contacts = new Map();
+	  this.contacts = new Map();
     this.client.on('contact', (ev) => {
       console.log('contact received', ev.contactDetails);
-      this.contacts.set(ev.contactDetails.number, ev.contactDetails.name);
+      let contact = {};
+      contact.userId = ev.contactDetails.number;
+      contact.senderName = ev.contactDetails.name;
+      contact.name = ev.contactDetails.name;
+
+      this.contacts.set(ev.contactDetails.number, contact);
     });
 	
     setTimeout(this.client.syncGroups, 5000); // request for sync groups 
@@ -88,14 +92,26 @@ class App extends MatrixPuppetBridgeBase {
     }
   }
   getThirdPartyRoomDataById(id) {
-    let name = this.contacts.get(id);
-    if ( !name ) {
+    let name = "";
+    let topic = "Signal Direct Message";
+    if ( this.contacts.has(id) ) {
+      this.contacts.get(id).name;
+    }
+    if ( this.groups.has(id) ) {
       name = this.groups.get(id);
+      topic = "Signal Group Message"
     }
     return Promise.resolve({
       name: name,
-      topic: "Signal Direct Message"
+      topic: topic
     })
+  }
+  getThirdPartyUserDataById(id) {
+    if(this.contacts.has(id)) {
+      return this.contacts.get(id);
+    } else {
+      return {senderName: id};
+    }
   }
   sendReadReceiptAsPuppetToThirdPartyRoomWithId(id) {
     let r = [];
