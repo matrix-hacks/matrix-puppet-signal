@@ -68,6 +68,14 @@ class App extends MatrixPuppetBridgeBase {
       this.contacts.set(ev.contactDetails.number, contact);
       this.joinThirdPartyUsersToStatusRoom([contact]);
     });
+
+    this.client.on('typing', (ev)=>{
+      let timestamp = ev.typing.timestamp;
+      let sender = ev.sender;
+      let status = ev.typing.started;
+      console.log('typing event', sender, timestamp);
+      this.handleTypingEvent(sender,status,ev.typing.group);
+    });
 	
     setTimeout(this.client.syncGroups, 5000); // request for sync groups 
     setTimeout(this.client.syncContacts, 10000); // request for sync contacts
@@ -95,6 +103,23 @@ class App extends MatrixPuppetBridgeBase {
 		    }
       }
       return true;
+    }
+  }
+  async handleTypingEvent(sender,status,group) {
+    try {
+      let id = sender;
+      if (group) {
+        id = group.id;
+      }
+      const ghostIntent = await this.getIntentFromThirdPartySenderId(sender);
+      const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(sender);
+      // HACK: copy from matrix-appservice-bridge/lib/components/indent.js
+      // client can get timeout value, but intent does not support this yet.
+      await ghostIntent._ensureJoined(matrixRoomId);
+      await ghostIntent._ensureHasPowerLevelFor(matrixRoomId, "m.typing");
+      return ghostIntent.client.sendTyping(matrixRoomId, status, 60000);
+    } catch (err) {
+      debug('could not send typing event', err.message);
     }
   }
   getThirdPartyRoomDataById(id) {

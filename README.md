@@ -17,6 +17,7 @@ It works through a dirty port of the [Signal Chrome App](https://github.com/Whis
 - [x] Matrix to Signal file attachment message
 - [x] contact list syncing
 - [x] send read receipts
+- [x] show typing events
 
 ## requirements
 
