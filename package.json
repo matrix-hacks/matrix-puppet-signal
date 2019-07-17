@@ -9,7 +9,7 @@
     "clean": "rm *.sqlite; rm data/*"
   },
   "dependencies": {
-    "matrix-puppet-bridge": "matrix-hacks/matrix-puppet-bridge#decce78",
+    "matrix-puppet-bridge": "matrix-hacks/matrix-puppet-bridge#c16ac9f",
     "signal-client": "^1.0.4"
   }
 }
