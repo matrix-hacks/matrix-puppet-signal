@@ -120,16 +120,25 @@ class App extends MatrixPuppetBridgeBase {
     }
   }
   sendReadReceiptAsPuppetToThirdPartyRoomWithId(id) {
-    let r = [];
+    let read = [];
+    let receipts = [];
     for(let i = 0; i < this.history.length; i++) {
       if(this.history[i].sender == id) {
-        r.push(this.history[i]);
+        read.push(this.history[i]);
+        receipts.push(this.history[i].timestamp);
         this.history.splice(i, 1);
         i--;
       }
     }
-    console.log("sending " + r.length + "receipts");
-    return this.client.markRead(r);
+    console.log("sending " + read.length + "receipts");
+
+    // send read receipts to your contacts if you wish to
+    if(config.sendReadReceipts) {
+      this.client.sendReadReceipts(id,receipts);
+    }
+
+    // mark messages as read in your signal clients
+    return this.client.syncReadMessages(read);
   }
   
   sendImageMessageAsPuppetToThirdPartyRoomWithId(id, data) {

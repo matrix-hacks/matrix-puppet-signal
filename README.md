@@ -16,7 +16,7 @@ It works through a dirty port of the [Signal Chrome App](https://github.com/Whis
 - [x] Signal to Matrix file attachment message
 - [x] Matrix to Signal file attachment message
 - [x] contact list syncing
-- [x] read receipts
+- [x] send read receipts
 
 ## requirements
 
