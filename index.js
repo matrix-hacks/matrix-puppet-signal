@@ -61,6 +61,10 @@ class App extends MatrixPuppetBridgeBase {
       contact.senderName = ev.contactDetails.name;
       contact.name = ev.contactDetails.name;
 
+      if(ev.contactDetails.avatar) {
+        let dataBuffer = Buffer.from(ev.contactDetails.avatar.data);
+        contact.avatar = {type: 'image/jpeg', buffer: dataBuffer};
+      }
       this.contacts.set(ev.contactDetails.number, contact);
       this.joinThirdPartyUsersToStatusRoom([contact]);
     });
@@ -82,7 +86,7 @@ class App extends MatrixPuppetBridgeBase {
     } else {
       for ( let i = 0; i < message.attachments.length; i++ ) {
         let att = message.attachments[i];
-		    payload.buffer = new Buffer(att.data);
+		    payload.buffer = new Buffer.from(att.data);
 		    payload.mimetype = att.contentType;
 		    if ( payload.mimetype.match(/^image/) ) {
 		      this.handleThirdPartyRoomImageMessage(payload);
