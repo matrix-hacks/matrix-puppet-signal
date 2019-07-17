@@ -26,8 +26,9 @@ class App extends MatrixPuppetBridgeBase {
     this.client.on('message', (ev) => {
       const { source, message, timestamp } = ev.data;
       let room = source;
-      if ( message.group != null)
+      if ( message.group != null ) {
         room = message.group.id;
+      }
       this.handleSignalMessage({
         roomId: room,
         senderId: source,
@@ -61,6 +62,7 @@ class App extends MatrixPuppetBridgeBase {
       contact.name = ev.contactDetails.name;
 
       this.contacts.set(ev.contactDetails.number, contact);
+      this.joinThirdPartyUsersToStatusRoom([contact]);
     });
 	
     setTimeout(this.client.syncGroups, 5000); // request for sync groups 
