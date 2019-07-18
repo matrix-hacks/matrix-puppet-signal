@@ -12,6 +12,7 @@ const path = require('path');
 const puppet = new Puppet(path.join(__dirname, './config.json' ));
 const debug = require('debug')('matrix-puppet:signal');
 let fs = require('fs');
+let Promise = require('bluebird');
 
 class App extends MatrixPuppetBridgeBase {
   getServicePrefix() {
@@ -43,7 +44,7 @@ class App extends MatrixPuppetBridgeBase {
         senderName: destination,
       }, message, timestamp);
     });
-	
+
     this.groups = new Map(); // abstract storage for groups
     // triggered when we run syncGroups
     this.client.on('group', (ev) => {
@@ -51,8 +52,22 @@ class App extends MatrixPuppetBridgeBase {
       let id = ev.groupDetails.id;
       let name = ev.groupDetails.name.replace(/\s/g, '_');
       this.groups.set(id, name);
+
+      this.getOrCreateMatrixRoomFromThirdPartyRoomId(id).then((matrixRoomId) => {
+        const otherPeople = ev.groupDetails.members.filter(phoneNumber => !phoneNumber.match("491781337947"));
+
+        Promise.map(otherPeople, (senderId) => {
+          return this.getIntentFromThirdPartySenderId(senderId).then(ghost=>{
+            return ghost.join(matrixRoomId).then(()=>{
+              console.log('joined ghost', senderId);
+            }, (err)=>{
+              console.log('failed to join ghost', senderId, matrixRoomId, err);
+            });
+          });
+        });
+      });
     });
-	
+
 	  this.contacts = new Map();
     this.client.on('contact', (ev) => {
       console.log('contact received', ev.contactDetails);
@@ -76,7 +91,7 @@ class App extends MatrixPuppetBridgeBase {
       console.log('typing event', sender, timestamp);
       this.handleTypingEvent(sender,status,ev.typing.group);
     });
-	
+
     setTimeout(this.client.syncGroups, 5000); // request for sync groups 
     setTimeout(this.client.syncContacts, 10000); // request for sync contacts
 
@@ -169,7 +184,7 @@ class App extends MatrixPuppetBridgeBase {
   sendTypingEventAsPuppetToThirdPartyRoomWithId(id, status) {
     return this.client.sendTypingMessage(id,status);
   }
-  
+
   sendImageMessageAsPuppetToThirdPartyRoomWithId(id, data) {
     return this.sendFileMessageAsPuppetToThirdPartyRoomWithId(id, data);
   }
@@ -183,7 +198,7 @@ class App extends MatrixPuppetBridgeBase {
       } else {
         return this.client.sendMessage( id, data.text, [{contentType : data.mimetype, size : data.size, data : image} ] );
       }
-    });  
+    });
   }
 
   sendMessageAsPuppetToThirdPartyRoomWithId(id, text) {
