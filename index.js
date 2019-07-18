@@ -165,6 +165,10 @@ class App extends MatrixPuppetBridgeBase {
     // mark messages as read in your signal clients
     return this.client.syncReadMessages(read);
   }
+
+  sendTypingEventAsPuppetToThirdPartyRoomWithId(id, status) {
+    return this.client.sendTypingMessage(id,status);
+  }
   
   sendImageMessageAsPuppetToThirdPartyRoomWithId(id, data) {
     return this.sendFileMessageAsPuppetToThirdPartyRoomWithId(id, data);

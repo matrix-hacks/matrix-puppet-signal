@@ -18,6 +18,7 @@ It works through a dirty port of the [Signal Chrome App](https://github.com/Whis
 - [x] contact list syncing
 - [x] send read receipts
 - [x] show typing events
+- [x] send typing events
 
 ## requirements
 
