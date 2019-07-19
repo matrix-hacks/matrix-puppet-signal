@@ -23,12 +23,13 @@ class App extends MatrixPuppetBridgeBase {
   }
   initThirdPartyClient() {
     this.client = new SignalClient("matrix");
+    this.myNumber = config.phoneNumber.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
 
     this.client.on('message', (ev) => {
       const { source, message, timestamp } = ev.data;
       let room = source;
       if ( message.group != null ) {
-        room = message.group.id;
+        room = window.btoa(message.group.id);
       }
       this.handleSignalMessage({
         roomId: room,
@@ -40,7 +41,7 @@ class App extends MatrixPuppetBridgeBase {
       const { destination, message, timestamp } = ev.data;
       let room = destination;
       if ( message.group != null ) {
-        room = message.group.id;
+        room = window.btoa(message.group.id);
       }
       this.handleSignalMessage({
         roomId: room,
@@ -53,12 +54,10 @@ class App extends MatrixPuppetBridgeBase {
     // triggered when we run syncGroups
     this.client.on('group', (ev) => {
       console.log('group received', ev.groupDetails);
-      let id = ev.groupDetails.id;
+      let id = window.btoa(ev.groupDetails.id);
       let group = { name: ev.groupDetails.name };
-      //let name = ev.groupDetails.name.replace(/\s/g, '_');
-
       this.getOrCreateMatrixRoomFromThirdPartyRoomId(id).then((matrixRoomId) => {
-        const otherPeople = ev.groupDetails.members.filter(phoneNumber => !phoneNumber.match("491781337947"));
+        const otherPeople = ev.groupDetails.members.filter(phoneNumber => !phoneNumber.match(this.myNumber));
         group.members = otherPeople;
 
         Promise.map(otherPeople, (senderId) => {
@@ -95,7 +94,7 @@ class App extends MatrixPuppetBridgeBase {
       let sender = ev.sender;
       let status = ev.typing.started;
       console.log('typing event', sender, timestamp);
-      this.handleTypingEvent(sender,status,ev.typing.groupId);
+      this.handleTypingEvent(sender,status,window.btoa(ev.typing.groupId));
     });
 
     setTimeout(this.client.syncGroups, 5000); // request for sync groups 
@@ -178,6 +177,9 @@ class App extends MatrixPuppetBridgeBase {
         i--;
       }
     }
+    if(read.length === 0) {
+      return true;
+    }
     console.log("sending " + read.length + "receipts");
 
     // mark messages as read in your signal clients
@@ -195,7 +197,7 @@ class App extends MatrixPuppetBridgeBase {
     if(config.sendTypingEvents) {
       let payload = { isTyping: status, timestamp: new Date().getTime() };
       if(this.groups.has(id)) {
-        payload.groupId = id;
+        payload.groupId = window.atob(id);
         payload.groupNumbers = this.groups.get(id).members;
       } else {
         payload.recipientId = id;
@@ -215,7 +217,7 @@ class App extends MatrixPuppetBridgeBase {
       const img = path;
       let image = fs.readFileSync(img);
       if(this.groups.has(id)) {
-        return this.client.sendMessageToGroup( id, data.text, [{contentType : data.mimetype, size : data.size, data : image} ] );
+        return this.client.sendMessageToGroup( window.atob(id), data.text, [{contentType : data.mimetype, size : data.size, data : image} ] );
       } else {
         return this.client.sendMessage( id, data.text, [{contentType : data.mimetype, size : data.size, data : image} ] );
       }
@@ -224,7 +226,7 @@ class App extends MatrixPuppetBridgeBase {
 
   sendMessageAsPuppetToThirdPartyRoomWithId(id, text) {
     if(this.groups.has(id)) {
-      return this.client.sendMessageToGroup(id, text);
+      return this.client.sendMessageToGroup(window.atob(id), text);
     } else {
       return this.client.sendMessage(id, text);
     }

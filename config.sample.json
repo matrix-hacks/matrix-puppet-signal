@@ -7,5 +7,6 @@
     "registration": "signal-registration.yaml"
   },
   "sendReadReceipts": true,
-  "sendTypingEvents": true
+  "sendTypingEvents": true,
+  "phoneNumber": "+123456789"
 }
