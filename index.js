@@ -37,7 +37,6 @@ class App extends MatrixPuppetBridgeBase {
     });
 
     this.client.on('sent', (ev) => {
-      console.log(ev)
       const { destination, message, timestamp } = ev.data;
       let room = destination;
       if ( message.group != null ) {
@@ -96,7 +95,7 @@ class App extends MatrixPuppetBridgeBase {
       let sender = ev.sender;
       let status = ev.typing.started;
       console.log('typing event', sender, timestamp);
-      this.handleTypingEvent(sender,status,ev.typing.group);
+      this.handleTypingEvent(sender,status,ev.typing.groupId);
     });
 
     setTimeout(this.client.syncGroups, 5000); // request for sync groups 
@@ -131,10 +130,10 @@ class App extends MatrixPuppetBridgeBase {
     try {
       let id = sender;
       if (group) {
-        id = group.id;
+        id = group;
       }
       const ghostIntent = await this.getIntentFromThirdPartySenderId(sender);
-      const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(sender);
+      const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(id);
       // HACK: copy from matrix-appservice-bridge/lib/components/indent.js
       // client can get timeout value, but intent does not support this yet.
       await ghostIntent._ensureJoined(matrixRoomId);
