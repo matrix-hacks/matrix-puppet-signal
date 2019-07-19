@@ -172,13 +172,15 @@ class App extends MatrixPuppetBridgeBase {
     }
     console.log("sending " + read.length + "receipts");
 
+    // mark messages as read in your signal clients
+    this.client.syncReadMessages(read);
+
     // send read receipts to your contacts if you wish to
     if(config.sendReadReceipts) {
       this.client.sendReadReceipts(id,receipts);
     }
 
-    // mark messages as read in your signal clients
-    return this.client.syncReadMessages(read);
+    return true;
   }
 
   sendTypingEventAsPuppetToThirdPartyRoomWithId(id, status) {
