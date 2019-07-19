@@ -6,5 +6,6 @@
     "domain": "your.home.server",
     "registration": "signal-registration.yaml"
   },
-  "sendReadReceipts": true
+  "sendReadReceipts": true,
+  "sendTypingEvents": true
 }
