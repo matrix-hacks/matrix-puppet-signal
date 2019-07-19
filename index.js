@@ -50,11 +50,12 @@ class App extends MatrixPuppetBridgeBase {
     this.client.on('group', (ev) => {
       console.log('group received', ev.groupDetails);
       let id = ev.groupDetails.id;
-      let name = ev.groupDetails.name.replace(/\s/g, '_');
-      this.groups.set(id, name);
+      let group = { name: ev.groupDetails.name };
+      //let name = ev.groupDetails.name.replace(/\s/g, '_');
 
       this.getOrCreateMatrixRoomFromThirdPartyRoomId(id).then((matrixRoomId) => {
         const otherPeople = ev.groupDetails.members.filter(phoneNumber => !phoneNumber.match("491781337947"));
+        group.members = otherPeople;
 
         Promise.map(otherPeople, (senderId) => {
           return this.getIntentFromThirdPartySenderId(senderId).then(ghost=>{
@@ -66,6 +67,7 @@ class App extends MatrixPuppetBridgeBase {
           });
         });
       });
+      this.groups.set(id, group);
     });
 
 	  this.contacts = new Map();
@@ -144,7 +146,7 @@ class App extends MatrixPuppetBridgeBase {
       this.contacts.get(id).name;
     }
     if ( this.groups.has(id) ) {
-      name = this.groups.get(id);
+      name = this.groups.get(id).name;
       topic = "Signal Group Message"
     }
     return Promise.resolve({
@@ -184,7 +186,19 @@ class App extends MatrixPuppetBridgeBase {
   }
 
   sendTypingEventAsPuppetToThirdPartyRoomWithId(id, status) {
-    return this.client.sendTypingMessage(id,status);
+    if(config.sendTypingEvents) {
+      let payload = { isTyping: status, timestamp: new Date().getTime() };
+      if(this.groups.has(id)) {
+        console.log("this is my group");
+        payload.groupId = id;
+        payload.groupNumbers = this.groups.get(id).members;
+      } else {
+        payload.recipientId = id;
+      }
+
+      //{ recipientId: phoneNumber, groupId: undefined, groupNumbers: undefined, isTyping: status, timestamp }
+      return this.client.sendTypingMessage(payload);
+    }
   }
 
   sendImageMessageAsPuppetToThirdPartyRoomWithId(id, data) {
