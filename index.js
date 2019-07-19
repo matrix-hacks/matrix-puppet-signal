@@ -102,7 +102,7 @@ class App extends MatrixPuppetBridgeBase {
     return this.client.start();
   }
   handleSignalMessage(payload, message, timestamp) {
-    this.history.push({sender: payload.senderId, timestamp: new Date(timestamp).getTime()});
+    this.history.push({sender: payload.senderId, timestamp: new Date(timestamp).getTime(), room: payload.roomId});
     if ( message.body ) {
       payload.text = message.body
     }
@@ -164,8 +164,10 @@ class App extends MatrixPuppetBridgeBase {
   sendReadReceiptAsPuppetToThirdPartyRoomWithId(id) {
     let read = [];
     let receipts = [];
+    let sender = id;
     for(let i = 0; i < this.history.length; i++) {
-      if(this.history[i].sender == id) {
+      if(this.history[i].room == id) {
+        sender = this.history[i].sender;
         read.push(this.history[i]);
         receipts.push(this.history[i].timestamp);
         this.history.splice(i, 1);
@@ -179,7 +181,7 @@ class App extends MatrixPuppetBridgeBase {
 
     // send read receipts to your contacts if you wish to
     if(config.sendReadReceipts) {
-      this.client.sendReadReceipts(id,receipts);
+        this.client.sendReadReceipts(sender, receipts);
     }
 
     return true;
@@ -189,7 +191,6 @@ class App extends MatrixPuppetBridgeBase {
     if(config.sendTypingEvents) {
       let payload = { isTyping: status, timestamp: new Date().getTime() };
       if(this.groups.has(id)) {
-        console.log("this is my group");
         payload.groupId = id;
         payload.groupNumbers = this.groups.get(id).members;
       } else {
