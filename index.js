@@ -94,7 +94,11 @@ class App extends MatrixPuppetBridgeBase {
       let sender = ev.sender;
       let status = ev.typing.started;
       console.log('typing event', sender, timestamp);
-      this.handleTypingEvent(sender,status,window.btoa(ev.typing.groupId));
+      let group = null;
+      if(ev.typing.groupId) {
+        btoa(ev.typing.groupId);
+      }
+      this.handleTypingEvent(sender,status,window.group);
     });
 
     setTimeout(this.client.syncGroups, 5000); // request for sync groups 
@@ -116,11 +120,7 @@ class App extends MatrixPuppetBridgeBase {
         let att = message.attachments[i];
 		    payload.buffer = new Buffer.from(att.data);
 		    payload.mimetype = att.contentType;
-		    if ( payload.mimetype.match(/^image/) ) {
-		      this.handleThirdPartyRoomImageMessage(payload);
-		    } else {
-		      this.sendStatusMsg({}, "dont know how to deal with filetype", payload);
-		    }
+        this.handleThirdPartyRoomMessageWithAttachment(payload);
       }
       return true;
     }
@@ -202,8 +202,6 @@ class App extends MatrixPuppetBridgeBase {
       } else {
         payload.recipientId = id;
       }
-
-      //{ recipientId: phoneNumber, groupId: undefined, groupNumbers: undefined, isTyping: status, timestamp }
       return this.client.sendTypingMessage(payload);
     }
   }
@@ -213,6 +211,7 @@ class App extends MatrixPuppetBridgeBase {
   }
 
   sendFileMessageAsPuppetToThirdPartyRoomWithId(id, data) {
+    data.text = "";
     return download.getTempfile(data.url, { tagFilename: true }).then(({path}) => {
       const img = path;
       let image = fs.readFileSync(img);
