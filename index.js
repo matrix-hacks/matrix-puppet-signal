@@ -133,6 +133,7 @@ class App extends MatrixPuppetBridgeBase {
     return this.client.start();
   }
   handleSignalMessage(payload, message, timestamp) {
+    this.handleTypingEvent(payload.senderId, false, payload.room); // stop typing if message received
     this.history.push({sender: payload.senderId, timestamp: new Date(timestamp).getTime(), room: payload.roomId});
     if ( message.body ) {
       payload.text = message.body
