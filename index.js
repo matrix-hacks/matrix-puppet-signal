@@ -31,7 +31,7 @@ class App extends MatrixPuppetBridgeBase {
       if ( message.group != null ) {
         room = window.btoa(message.group.id);
       }
-      if(message.group.name) {
+      if(message.group && message.group.name) {
         console.log('added to new group');
         let id = window.btoa(message.group.id);
         let group = { name: message.group.name };
