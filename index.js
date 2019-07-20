@@ -96,9 +96,9 @@ class App extends MatrixPuppetBridgeBase {
       console.log('typing event', sender, timestamp);
       let group = null;
       if(ev.typing.groupId) {
-        btoa(ev.typing.groupId);
+        group = btoa(ev.typing.groupId);
       }
-      this.handleTypingEvent(sender,status,window.group);
+      this.handleTypingEvent(sender,status,group);
     });
 
     setTimeout(this.client.syncGroups, 5000); // request for sync groups 
