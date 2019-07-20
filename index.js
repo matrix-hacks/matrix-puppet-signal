@@ -31,6 +31,27 @@ class App extends MatrixPuppetBridgeBase {
       if ( message.group != null ) {
         room = window.btoa(message.group.id);
       }
+      if(message.group.name) {
+        console.log('added to new group');
+        let id = window.btoa(message.group.id);
+        let group = { name: message.group.name };
+        this.getOrCreateMatrixRoomFromThirdPartyRoomId(id).then((matrixRoomId) => {
+          const otherPeople = message.group.members.filter(phoneNumber => !phoneNumber.match(this.myNumber));
+          group.members = otherPeople;
+
+          Promise.map(otherPeople, (member) => {
+            return this.getIntentFromThirdPartySenderId(member).then(ghost=>{
+              return ghost.join(matrixRoomId).then(()=>{
+                console.log('joined ghost', member);
+              }, (err)=>{
+                console.log('failed to join ghost', member, matrixRoomId, err);
+              });
+            });
+          });
+        });
+        this.groups.set(id, group);
+        return;
+      }
       this.handleSignalMessage({
         roomId: room,
         senderId: source,
@@ -54,6 +75,9 @@ class App extends MatrixPuppetBridgeBase {
     // triggered when we run syncGroups
     this.client.on('group', (ev) => {
       console.log('group received', ev.groupDetails);
+      if(!ev.groupDetails.active) {
+        return;
+      }
       let id = window.btoa(ev.groupDetails.id);
       let group = { name: ev.groupDetails.name };
       this.getOrCreateMatrixRoomFromThirdPartyRoomId(id).then((matrixRoomId) => {
@@ -73,7 +97,7 @@ class App extends MatrixPuppetBridgeBase {
       this.groups.set(id, group);
     });
 
-	  this.contacts = new Map();
+    this.contacts = new Map();
     this.client.on('contact', (ev) => {
       console.log('contact received', ev.contactDetails);
       let contact = {};
