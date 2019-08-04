@@ -1,6 +1,6 @@
 {
   "name": "matrix-puppet-signal",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "main": "index.js",
   "license": "MIT",
   "scripts": {
@@ -9,7 +9,9 @@
     "clean": "rm *.sqlite; rm data/*"
   },
   "dependencies": {
+    "extract-zip": "^1.6.7",
     "matrix-puppet-bridge": "matrix-hacks/matrix-puppet-bridge#c16ac9f",
-    "signal-client": "nr23730/node-signal-client"
+    "require-dir": "^1.2.0",
+    "signal-client": "https://github.com/nr23730/node-signal-client"
   }
 }
