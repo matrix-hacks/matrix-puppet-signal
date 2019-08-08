@@ -241,7 +241,7 @@ class App extends MatrixPuppetBridgeBase {
       const img = path;
       let image = fs.readFileSync(img);
       if(this.groups.has(id)) {
-        return this.client.sendMessageToGroup( window.atob(id), data.text, [{contentType : data.mimetype, size : data.size, data : image} ] );
+        return this.client.sendMessageToGroup( window.atob(id), data.text, this.groups.get(id).members, [{contentType : data.mimetype, size : data.size, data : image} ] );
       } else {
         return this.client.sendMessage( id, data.text, [{contentType : data.mimetype, size : data.size, data : image} ] );
       }
@@ -250,7 +250,7 @@ class App extends MatrixPuppetBridgeBase {
 
   sendMessageAsPuppetToThirdPartyRoomWithId(id, text) {
     if(this.groups.has(id)) {
-      return this.client.sendMessageToGroup(window.atob(id), text);
+      return this.client.sendMessageToGroup(window.atob(id), text, this.groups.get(id).members);
     } else {
       return this.client.sendMessage(id, text);
     }
@@ -290,4 +290,3 @@ new Cli({
     });
   }
 }).run();
-
