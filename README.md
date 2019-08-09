@@ -29,6 +29,8 @@ required software:
 - Node.js 10.13.0
 - yarn
 
+Please verify if `yarn -v` outputs something like `1.17.3`. If your output is `ERROR: There are no scenarios; must have at least one.` you have installed cmdtests instead of yarn. Please [install yarn](https://yarnpkg.com/en/docs/install) before you continue.
+
 During the installation you will need Node.js version 10.13.0 because it's required in the `package.json` file of Signal-Desktop. After installing you can switch back to your preferred version of Node.js. The easiest way to change your version is using [n](https://www.npmjs.com/package/n). You can install it using `npm install -g n` and switch to Node.js 10.13.0 using `n 10.13.0`.
 
 ## installation
