@@ -125,8 +125,8 @@ class App extends MatrixPuppetBridgeBase {
       this.handleTypingEvent(sender,status,group);
     });
 
-    setTimeout(this.client.syncGroups, 5000); // request for sync groups 
-    setTimeout(this.client.syncContacts, 10000); // request for sync contacts
+    setTimeout(this.client.syncContacts, 5000); // request for sync contacts
+    setTimeout(this.client.syncGroups, 10000); // request for sync groups
 
     this.history = [];
 
