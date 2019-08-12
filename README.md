@@ -11,9 +11,9 @@ It's based on the official [Signal-Desktop](https://github.com/WhisperSystems/Si
 - [x] Matrix to Signal direct text message
 - [x] Signal to Matrix group text message
 - [x] Matrix to Signal group text message
-- [x] (Signal to Matrix image attachment message) currently broken
+- [x] Signal to Matrix image attachment message
 - [x] Matrix to Signal image attachment message
-- [x] (Signal to Matrix file attachment message) currently broken
+- [x] Signal to Matrix file attachment message
 - [x] Matrix to Signal file attachment message
 - [x] contact list syncing
 - [x] group syncing

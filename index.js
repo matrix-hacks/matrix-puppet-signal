@@ -143,9 +143,11 @@ class App extends MatrixPuppetBridgeBase {
     } else {
       for ( let i = 0; i < message.attachments.length; i++ ) {
         let att = message.attachments[i];
-		    payload.buffer = new Buffer.from(att.data);
-		    payload.mimetype = att.contentType;
-        this.handleThirdPartyRoomMessageWithAttachment(payload);
+        this.client.downloadAttachment(att).then(data => {
+          payload.buffer = new Buffer.from(data.data);
+		      payload.mimetype = data.contentType;
+          this.handleThirdPartyRoomMessageWithAttachment(payload);
+        });
       }
       return true;
     }
