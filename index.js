@@ -26,6 +26,7 @@ class App extends MatrixPuppetBridgeBase {
     this.myNumber = config.phoneNumber.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
 
     this.client.on('message', (ev) => {
+      console.log(ev.data.message.group);
       const { source, message, timestamp } = ev.data;
       let room = source;
       if ( message.group != null ) {
@@ -35,21 +36,42 @@ class App extends MatrixPuppetBridgeBase {
         console.log('added to new group');
         let id = window.btoa(message.group.id);
         let group = { name: message.group.name };
-        this.getOrCreateMatrixRoomFromThirdPartyRoomId(id).then((matrixRoomId) => {
-          const otherPeople = message.group.members.filter(phoneNumber => !phoneNumber.match(this.myNumber));
-          group.members = otherPeople;
-
-          Promise.map(otherPeople, (member) => {
-            return this.getIntentFromThirdPartySenderId(member).then(ghost=>{
-              return ghost.join(matrixRoomId).then(()=>{
-                console.log('joined ghost', member);
-              }, (err)=>{
-                console.log('failed to join ghost', member, matrixRoomId, err);
+        if(message.group.avatar) {
+          this.client.downloadAttachment(message.group.avatar).then(data => {
+            group.avatar = {type: 'image/jpeg', buffer: data.data};
+            this.groups.set(id, group);
+            this.getOrCreateMatrixRoomFromThirdPartyRoomId(id).then((matrixRoomId) => {
+              const otherPeople = message.group.members.filter(phoneNumber => !phoneNumber.match(this.myNumber));
+              group.members = otherPeople;
+    
+              Promise.map(otherPeople, (member) => {
+                return this.getIntentFromThirdPartySenderId(member).then(ghost=>{
+                  return ghost.join(matrixRoomId).then(()=>{
+                    console.log('joined ghost', member);
+                  }, (err)=>{
+                    console.log('failed to join ghost', member, matrixRoomId, err);
+                  });
+                });
               });
             });
           });
-        });
-        this.groups.set(id, group);
+        } else {
+          this.groups.set(id, group);
+          this.getOrCreateMatrixRoomFromThirdPartyRoomId(id).then((matrixRoomId) => {
+            const otherPeople = message.group.members.filter(phoneNumber => !phoneNumber.match(this.myNumber));
+            group.members = otherPeople;
+  
+            Promise.map(otherPeople, (member) => {
+              return this.getIntentFromThirdPartySenderId(member).then(ghost=>{
+                return ghost.join(matrixRoomId).then(()=>{
+                  console.log('joined ghost', member);
+                }, (err)=>{
+                  console.log('failed to join ghost', member, matrixRoomId, err);
+                });
+              });
+            });
+          });
+        }
         return;
       }
       this.handleSignalMessage({
@@ -80,6 +102,10 @@ class App extends MatrixPuppetBridgeBase {
       }
       let id = window.btoa(ev.groupDetails.id);
       let group = { name: ev.groupDetails.name };
+      if(ev.groupDetails.avatar) {
+        group.avatar = {type: 'image/jpeg', buffer: ev.groupDetails.avatar.data};
+      }
+      this.groups.set(id, group);
       this.getOrCreateMatrixRoomFromThirdPartyRoomId(id).then((matrixRoomId) => {
         const otherPeople = ev.groupDetails.members.filter(phoneNumber => !phoneNumber.match(this.myNumber));
         group.members = otherPeople;
@@ -94,7 +120,6 @@ class App extends MatrixPuppetBridgeBase {
           });
         });
       });
-      this.groups.set(id, group);
     });
 
     this.contacts = new Map();
@@ -147,7 +172,7 @@ class App extends MatrixPuppetBridgeBase {
           payload.buffer = new Buffer.from(data.data);
 		      payload.mimetype = data.contentType;
           this.handleThirdPartyRoomMessageWithAttachment(payload);
-        });
+        }); 
       }
       return true;
     }
@@ -172,17 +197,17 @@ class App extends MatrixPuppetBridgeBase {
   getThirdPartyRoomDataById(id) {
     let name = "";
     let topic = "Signal Direct Message";
+    let avatar;
     if ( this.contacts.has(id) ) {
       this.contacts.get(id).name;
+      avatar = this.contacts.get(id).avatar;
     }
     if ( this.groups.has(id) ) {
       name = this.groups.get(id).name;
-      topic = "Signal Group Message"
+      topic = "Signal Group Message";
+      avatar = this.groups.get(id).avatar;
     }
-    return Promise.resolve({
-      name: name,
-      topic: topic
-    })
+    return Promise.resolve({name, topic, avatar});
   }
   getThirdPartyUserDataById(id) {
     if(this.contacts.has(id)) {
