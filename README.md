@@ -17,6 +17,7 @@ It's based on the official [Signal-Desktop](https://github.com/WhisperSystems/Si
 - [x] Matrix to Signal file attachment message
 - [x] contact list syncing
 - [x] group syncing
+- [x] show read receipts
 - [x] send read receipts
 - [x] show typing events
 - [x] send typing events
