@@ -202,7 +202,21 @@ class App extends MatrixPuppetBridgeBase {
     }
   }
 
-  async handleReadReceipt(timestamp, sender) {}
+  async handleReadReceipt(timestamp, sender) {
+    try {
+      const { numbers, event } = this.receiptHistory.get(timestamp);
+      const ghostIntent = await this.getIntentFromThirdPartySenderId(sender);
+      const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(sender);
+      // HACK: copy from matrix-appservice-bridge/lib/components/indent.js
+      // client can get timeout value, but intent does not support this yet.
+      await ghostIntent._ensureJoined(matrixRoomId);
+      await ghostIntent._ensureHasPowerLevelFor(matrixRoomId, "m.read");
+      ghostIntent.client.sendReadReceipt (event);
+      return this.receiptHistory.delete(timestamp);
+    } catch (err) {
+      debug('could not send read event', err.message);
+    }
+  }
 
   getThirdPartyRoomDataById(id) {
     let name = "";
@@ -286,12 +300,13 @@ class App extends MatrixPuppetBridgeBase {
   }
 
   sendMessageAsPuppetToThirdPartyRoomWithId(id, text, event) {
+    event.getRoomId = () => event.room_id;
+    event.getId = () => event.event_id;
     if(this.groups.has(id)) {
       return this.client.sendMessageToGroup(window.atob(id), text, this.groups.get(id).members);
     } else {
       return this.client.sendMessage(id, text).then(result => {
         this.receiptHistory.set(result.timestamp, {numbers: result.numbers, event});
-        console.log(this.receiptHistory);
       });
     }
   }
