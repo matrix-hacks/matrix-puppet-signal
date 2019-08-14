@@ -93,6 +93,7 @@ class App extends MatrixPuppetBridgeBase {
       }, message, timestamp);
     });
 
+    this.receiptHistory = new Map();
     this.client.on('read', (ev) => {
       const { timestamp, reader } = ev.read;
       console.log("read event", timestamp, reader);
@@ -284,11 +285,14 @@ class App extends MatrixPuppetBridgeBase {
     });
   }
 
-  sendMessageAsPuppetToThirdPartyRoomWithId(id, text) {
+  sendMessageAsPuppetToThirdPartyRoomWithId(id, text, event) {
     if(this.groups.has(id)) {
       return this.client.sendMessageToGroup(window.atob(id), text, this.groups.get(id).members);
     } else {
-      return this.client.sendMessage(id, text);
+      return this.client.sendMessage(id, text).then(result => {
+        this.receiptHistory.set(result.timestamp, {numbers: result.numbers, event});
+        console.log(this.receiptHistory);
+      });
     }
   }
 }
