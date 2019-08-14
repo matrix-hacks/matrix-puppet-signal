@@ -93,6 +93,12 @@ class App extends MatrixPuppetBridgeBase {
       }, message, timestamp);
     });
 
+    this.client.on('read', (ev) => {
+      const { timestamp, reader } = ev.read;
+      console.log("read event", timestamp, reader);
+      this.handleReadReceipt(timestamp, reader);
+    });
+
     this.groups = new Map(); // abstract storage for groups
     // triggered when we run syncGroups
     this.client.on('group', (ev) => {
@@ -194,6 +200,9 @@ class App extends MatrixPuppetBridgeBase {
       debug('could not send typing event', err.message);
     }
   }
+
+  async handleReadReceipt(timestamp, sender) {}
+
   getThirdPartyRoomDataById(id) {
     let name = "";
     let topic = "Signal Direct Message";
