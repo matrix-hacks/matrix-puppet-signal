@@ -42,6 +42,8 @@ cd into the directory
 
 run `npm install`
 
+**Note:** Run neither the installation command nor the bridge itself with root rights.
+
 ## register/link with your signal mobile app
 
 Before configuring the bridge with Matrix, **you need to setup the Signal link with your phone**.
