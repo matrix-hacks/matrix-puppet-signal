@@ -26,7 +26,6 @@ class App extends MatrixPuppetBridgeBase {
     this.myNumber = config.phoneNumber.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
 
     this.client.on('message', (ev) => {
-      console.log(ev.data.message.group);
       const { source, message, timestamp } = ev.data;
       let room = source;
       if ( message.group != null ) {
@@ -171,6 +170,9 @@ class App extends MatrixPuppetBridgeBase {
       payload.text = message.body
     }
     if ( message.attachments.length === 0 ) {
+      if(payload.text == null) {
+        return;
+      }
       return this.handleThirdPartyRoomMessage(payload);
     } else {
       for ( let i = 0; i < message.attachments.length; i++ ) {
