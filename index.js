@@ -45,10 +45,12 @@ class App extends MatrixPuppetBridgeBase {
     
               Promise.map(otherPeople, (member) => {
                 return this.getIntentFromThirdPartySenderId(member).then(ghost=>{
-                  return ghost.join(matrixRoomId).then(()=>{
-                    console.log('joined ghost', member);
-                  }, (err)=>{
-                    console.log('failed to join ghost', member, matrixRoomId, err);
+                  return this.puppet.getClient().invite(matrixRoomId, ghost.client.credentials.userId).then(() => {
+                    return ghost.join(matrixRoomId).then(()=>{
+                      console.log('joined ghost', member);
+                    }, (err)=>{
+                      console.log('failed to join ghost', member, matrixRoomId, err);
+                    });
                   });
                 });
               });
@@ -62,10 +64,12 @@ class App extends MatrixPuppetBridgeBase {
   
             Promise.map(otherPeople, (member) => {
               return this.getIntentFromThirdPartySenderId(member).then(ghost=>{
-                return ghost.join(matrixRoomId).then(()=>{
-                  console.log('joined ghost', member);
-                }, (err)=>{
-                  console.log('failed to join ghost', member, matrixRoomId, err);
+                return this.puppet.getClient().invite(matrixRoomId, ghost.client.credentials.userId).then(() => {
+                  return ghost.join(matrixRoomId).then(()=>{
+                    console.log('joined ghost', member);
+                  }, (err)=>{
+                    console.log('failed to join ghost', member, matrixRoomId, err);
+                  });
                 });
               });
             });
@@ -118,10 +122,12 @@ class App extends MatrixPuppetBridgeBase {
 
         Promise.map(otherPeople, (senderId) => {
           return this.getIntentFromThirdPartySenderId(senderId).then(ghost=>{
-            return ghost.join(matrixRoomId).then(()=>{
-              console.log('joined ghost', senderId);
-            }, (err)=>{
-              console.log('failed to join ghost', senderId, matrixRoomId, err);
+            return this.puppet.getClient().invite(matrixRoomId, ghost.client.credentials.userId).then(() => {
+              return ghost.join(matrixRoomId).then(()=>{
+                console.log('joined ghost', senderId);
+              }, (err)=>{
+                console.log('failed to join ghost', senderId, matrixRoomId, err);
+              });
             });
           });
         });
