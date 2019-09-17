@@ -245,11 +245,13 @@ class App extends MatrixPuppetBridgeBase {
       topic = "Signal Group Message";
       avatar = this.groups.get(id).avatar;
     }
-    return Promise.resolve({name, topic, avatar});
+    return Promise.resolve({name, topic, avatar, is_direct: false});
   }
   getThirdPartyUserDataById(id) {
     if(this.contacts.has(id)) {
-      return this.contacts.get(id);
+      let contact = this.contacts.get(id);
+      contact.is_direct = true;
+      return contact;
     } else {
       return {senderName: id};
     }

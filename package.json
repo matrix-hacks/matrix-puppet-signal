@@ -10,7 +10,7 @@
     "postinstall": "cd node_modules/signal-desktop && yarn && yarn grunt"
   },
   "dependencies": {
-    "matrix-puppet-bridge": "github:matrix-hacks/matrix-puppet-bridge#2fd0e44",
+    "matrix-puppet-bridge": "github:matrix-hacks/matrix-puppet-bridge#219d46f",
     "signal-client": "nr23730/node-signal-client#7039d7b"
   }
 }
