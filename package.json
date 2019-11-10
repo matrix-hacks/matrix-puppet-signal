@@ -11,6 +11,6 @@
   },
   "dependencies": {
     "matrix-puppet-bridge": "github:matrix-hacks/matrix-puppet-bridge#219d46f",
-    "signal-client": "nr23730/node-signal-client#d969738"
+    "signal-client": "nr23730/node-signal-client#9956c75"
   }
 }
