@@ -5,5 +5,8 @@
     "homeserverUrl":"https://your.home.server",
     "domain": "your.home.server",
     "registration": "signal-registration.yaml"
-  }
+  },
+  "sendReadReceipts": true,
+  "sendTypingEvents": true,
+  "phoneNumber": "+123456789"
 }

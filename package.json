@@ -1,15 +1,16 @@
 {
   "name": "matrix-puppet-signal",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "main": "index.js",
   "license": "MIT",
   "scripts": {
     "start": "DEBUG=matrix-puppet:* node index.js",
     "link": "node -e \"new (require('signal-client'))('matrix').link()\"",
-    "clean": "rm *.sqlite; rm data/*"
+    "clean": "rm *.sqlite; rm data/*",
+    "postinstall": "cd node_modules/signal-desktop && yarn && yarn grunt"
   },
   "dependencies": {
-    "matrix-puppet-bridge": "matrix-hacks/matrix-puppet-bridge#decce78",
-    "signal-client": "^1.0.4"
+    "matrix-puppet-bridge": "github:matrix-hacks/matrix-puppet-bridge#219d46f",
+    "signal-client": "matrix-hacks/node-signal-client#307c5b0"
   }
 }
