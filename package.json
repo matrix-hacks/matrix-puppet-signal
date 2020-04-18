@@ -6,11 +6,11 @@
   "scripts": {
     "start": "DEBUG=matrix-puppet:* node index.js",
     "link": "node -e \"new (require('signal-client'))('matrix').link()\"",
-    "clean": "rm *.sqlite; rm data/*",
+    "clean": "rm *.sqlite; rm -rf data/*",
     "postinstall": "cd node_modules/signal-desktop && yarn && yarn grunt"
   },
   "dependencies": {
     "matrix-puppet-bridge": "github:matrix-hacks/matrix-puppet-bridge#186331f",
-    "signal-client": "matrix-hacks/node-signal-client#master"
+    "signal-client": "matrix-hacks/node-signal-client#d72e1f2"
   }
 }
