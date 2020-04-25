@@ -100,7 +100,7 @@ class App extends MatrixPuppetBridgeBase {
     this.client.on('read', (ev) => {
       const { timestamp, reader } = ev.read;
       console.log("read event", timestamp, reader);
-      this.handleReadReceipt(timestamp, reader);
+      this.handleSignalReadReceipt(timestamp, reader);
     });
 
     this.groups = new Map(); // abstract storage for groups
@@ -165,13 +165,10 @@ class App extends MatrixPuppetBridgeBase {
     setTimeout(this.client.syncContacts, 5000); // request for sync contacts
     setTimeout(this.client.syncGroups, 10000); // request for sync groups
 
-    this.history = [];
-
     return this.client.start();
   }
   handleSignalMessage(payload, message, timestamp) {
     this.handleTypingEvent(payload.senderId, false, payload.room); // stop typing if message received
-    this.history.push({sender: payload.senderId, timestamp: new Date(timestamp).getTime(), room: payload.roomId});
     if ( message.body ) {
       payload.text = message.body
     }
@@ -210,7 +207,7 @@ class App extends MatrixPuppetBridgeBase {
     }
   }
 
-  async handleReadReceipt(timestamp, sender) {
+  async handleSignalReadReceipt(timestamp, sender) {
     try {
       const { numbers, room, event } = this.receiptHistory.get(timestamp);
       const ghostIntent = await this.getIntentFromThirdPartySenderId(sender);
@@ -256,45 +253,28 @@ class App extends MatrixPuppetBridgeBase {
       return {senderName: id};
     }
   }
-  sendReadReceiptAsPuppetToThirdPartyRoomWithId(id) {
-    let read = [];
-    let receipts = [];
-    let sender = id;
-    for(let i = 0; i < this.history.length; i++) {
-      if(this.history[i].room == id) {
-        sender = this.history[i].sender;
-        read.push(this.history[i]);
-        receipts.push(this.history[i].timestamp);
-        this.history.splice(i, 1);
-        i--;
-      }
+  async sendReadReceiptAsPuppetToThirdPartyRoomWithId(id) {
+    let isGroup = false;
+    if(this.groups.has(id)) {
+      isGroup = true;
     }
-    if(read.length === 0) {
-      return true;
-    }
-    console.log("sending " + read.length + "receipts");
+    let timeStamp = await new Date().getTime();
+    
+    console.log("sending read receipts for" + id);
 
     // mark messages as read in your signal clients
-    this.client.syncReadMessages(read);
-
-    // send read receipts to your contacts if you wish to
-    if(config.sendReadReceipts) {
-        this.client.sendReadReceipts(sender, receipts);
-    }
+    await this.client.syncReadReceipts(id, isGroup, timeStamp, config.sendReadReceipts);
 
     return true;
   }
 
-  sendTypingEventAsPuppetToThirdPartyRoomWithId(id, status) {
+  async sendTypingEventAsPuppetToThirdPartyRoomWithId(id, status) {
     if(config.sendTypingEvents) {
-      let payload = { isTyping: status, timestamp: new Date().getTime() };
+      let isGroup = false;
       if(this.groups.has(id)) {
-        payload.groupId = window.atob(id);
-        payload.groupNumbers = this.groups.get(id).members;
-      } else {
-        payload.recipientId = id;
+        isGroup = true;
       }
-      return this.client.sendTypingMessage(payload);
+      await this.client.sendTypingMessage(id, isGroup, status);
     }
   }
 
