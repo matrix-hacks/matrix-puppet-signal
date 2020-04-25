@@ -1,6 +1,6 @@
 const {
   MatrixAppServiceBridge: {
-    Cli, AppServiceRegistration
+    Cli, AppServiceRegistration, EventBridgeStore, StoredEvent
   },
   Puppet,
   MatrixPuppetBridgeBase,
@@ -96,7 +96,6 @@ class App extends MatrixPuppetBridgeBase {
       }, message, timestamp);
     });
 
-    this.receiptHistory = new Map();
     this.client.on('read', (ev) => {
       const { timestamp, reader } = ev.read;
       console.log("read event", timestamp, reader);
@@ -189,6 +188,7 @@ class App extends MatrixPuppetBridgeBase {
       return true;
     }
   }
+  //TODO:
   async handleTypingEvent(sender,status,group) {
     try {
       let id = sender;
@@ -207,23 +207,17 @@ class App extends MatrixPuppetBridgeBase {
     }
   }
 
-  async handleSignalReadReceipt(timestamp, sender) {
+  async handleSignalReadReceipt(timeStamp, reader) {
     try {
-      const { numbers, room, event } = this.receiptHistory.get(timestamp);
-      const ghostIntent = await this.getIntentFromThirdPartySenderId(sender);
-      const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(room);
+      //Get event and roomId from the eventstore
+      const event = this.bridge.getEventStore().getEntryByRemoteId(timeStamp, reader).get('ev');
+      const matrixRoomId = this.bridge.getEventStore().getEntryByRemoteId(timeStamp, reader).getMatrixRoomId();
+      const ghostIntent = await this.getIntentFromThirdPartySenderId(reader);
       // HACK: copy from matrix-appservice-bridge/lib/components/indent.js
       // client can get timeout value, but intent does not support this yet.
       await ghostIntent._ensureJoined(matrixRoomId);
       await ghostIntent._ensureHasPowerLevelFor(matrixRoomId, "m.read");
       ghostIntent.client.sendReadReceipt (event);
-      const otherPeople = numbers.filter(phoneNumber => !phoneNumber.match(sender));
-      if(otherPeople.length > 0) {
-        return this.receiptHistory.set(timestamp, {numbers: otherPeople, room, event})
-      } else {
-        return this.receiptHistory.delete(timestamp);
-      }
-      
     } catch (err) {
       debug('could not send read event', err.message);
     }
@@ -254,59 +248,56 @@ class App extends MatrixPuppetBridgeBase {
     }
   }
   async sendReadReceiptAsPuppetToThirdPartyRoomWithId(id) {
-    let isGroup = false;
-    if(this.groups.has(id)) {
-      isGroup = true;
-    }
     let timeStamp = await new Date().getTime();
     
-    console.log("sending read receipts for" + id);
+    console.log("sending read receipts for " + id);
 
     // mark messages as read in your signal clients
-    await this.client.syncReadReceipts(id, isGroup, timeStamp, config.sendReadReceipts);
+    await this.client.syncReadReceipts(id, this.groups.has(id), timeStamp, config.sendReadReceipts);
 
     return true;
   }
 
   async sendTypingEventAsPuppetToThirdPartyRoomWithId(id, status) {
-    if(config.sendTypingEvents) {
-      let isGroup = false;
-      if(this.groups.has(id)) {
-        isGroup = true;
-      }
-      await this.client.sendTypingMessage(id, isGroup, status);
-    }
+      await this.client.sendTypingMessage(id, this.groups.has(id), status);
   }
 
   sendImageMessageAsPuppetToThirdPartyRoomWithId(id, data) {
     return this.sendFileMessageAsPuppetToThirdPartyRoomWithId(id, data);
   }
 
-  sendFileMessageAsPuppetToThirdPartyRoomWithId(id, data) {
+  sendFileMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, data) {
     data.text = "";
+    if (this.groups.has(thirdPartyRoomId)) {
+      thirdPartyRoomId = window.atob(id);
+    }
     return download.getTempfile(data.url, { tagFilename: true }).then(({path}) => {
-      const img = path;
-      let image = fs.readFileSync(img);
-      if(this.groups.has(id)) {
-        return this.client.sendMessageToGroup( window.atob(id), data.text, this.groups.get(id).members, [{contentType : data.mimetype, size : data.size, data : image} ] );
-      } else {
-        return this.client.sendMessage( id, data.text, [{contentType : data.mimetype, size : data.size, data : image} ] );
-      }
+      let file = fs.readFileSync(path);
+      let image = new Uint8Array(file).buffer;
+      return this.client.sendMessage(thirdPartyRoomId, this.groups.has(thirdPartyRoomId), data.text, [{contentType : data.mimetype, size : data.size, data : image} ]).then(result => {
+        let {timeStamp, recipients} = result;
+        let message;
+        for ( let i = 0; i < recipients.length; i++ ) {
+          //Signal uses timestamp as message id, and looks up recipients by timestamp before finding the one for the receipt.
+          //Therefore we add it to the event store with roomId timestamp and eventId user, so we can find event later
+          message = new StoredEvent(data.room_id, data.event_id, timeStamp, recipients[i], {ev: data});
+          this.bridge.getEventStore().upsertEvent(message);
+        }
+      });
     });
   }
 
-  sendMessageAsPuppetToThirdPartyRoomWithId(id, text, event) {
-    event.getRoomId = () => event.room_id;
-    event.getId = () => event.event_id;
-    if(this.groups.has(id)) {
-      return this.client.sendMessageToGroup(window.atob(id), text, this.groups.get(id).members).then(result => {
-        this.receiptHistory.set(result.timestamp, {numbers: result.numbers, room: id, event});
-      });
-    } else {
-      return this.client.sendMessage(id, text).then(result => {
-        this.receiptHistory.set(result.timestamp, {numbers: result.numbers, room: id, event});
-      });
-    }
+  sendMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, text, event) {
+    return this.client.sendMessage(thirdPartyRoomId, this.groups.has(thirdPartyRoomId), text).then(result => {
+      let {timeStamp, recipients} = result;
+      let message;
+      for ( let i = 0; i < recipients.length; i++ ) {
+        //Signal uses timestamp as message id, and looks up recipients by timestamp before finding the one for the receipt.
+        //Therefore we add it to the event store with roomId timestamp and eventId user, so we can find event later
+        message = new StoredEvent(event.room_id, event.event_id, timeStamp, recipients[i], {ev: event});
+        this.bridge.getEventStore().upsertEvent(message);
+      }
+    });
   }
 }
 
