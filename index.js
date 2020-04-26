@@ -171,6 +171,10 @@ class App extends MatrixPuppetBridgeBase {
     if ( message.body ) {
       payload.text = message.body
     }
+    //Undefined text means file will not get through, so we just set it to empty string
+    else {
+      payload.text = "";
+    }
     if ( message.attachments.length === 0 ) {
       if(payload.text == null) {
         return;
