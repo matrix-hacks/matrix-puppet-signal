@@ -277,8 +277,19 @@ class App extends MatrixPuppetBridgeBase {
     }
     return download.getTempfile(data.url, { tagFilename: true }).then(({path}) => {
       let file = fs.readFileSync(path);
-      let image = new Uint8Array(file).buffer;
-      return this.client.sendMessage(thirdPartyRoomId, this.groups.has(thirdPartyRoomId), data.text, [{contentType : data.mimetype, size : data.size, data : image} ]).then(result => {
+      let bufferArray = new Uint8Array(file).buffer;
+      //We need to set a mimetype otherwise signal crashes
+      if (!data.mimetype) {
+        data.mimetype = "";
+      }
+      let attachment = {
+        data: bufferArray,
+        size: file.byteLength,
+        contentType: data.mimetype,
+        fileName: data.filename,
+        path: path,
+      };
+      return this.client.sendMessage(thirdPartyRoomId, this.groups.has(thirdPartyRoomId), data.text, [attachment]).then(result => {
         let {timeStamp, recipients} = result;
         let message;
         for ( let i = 0; i < recipients.length; i++ ) {
