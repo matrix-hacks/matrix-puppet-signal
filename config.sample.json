@@ -4,7 +4,10 @@
   "bridge": {
     "homeserverUrl":"https://your.home.server",
     "domain": "your.home.server",
-    "registration": "signal-registration.yaml"
+    "registration": "signal-registration.yaml",
+    "eventStore": "data/puppet-events.db",
+    "userStore": "data/puppet-users.db",
+    "roomStore": "data/puppet-rooms.db"
   },
   "sendReadReceipts": true,
   "sendTypingEvents": true,
