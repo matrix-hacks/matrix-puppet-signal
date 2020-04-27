@@ -28,8 +28,10 @@ class App extends MatrixPuppetBridgeBase {
     this.client.on('message', (ev) => {
       const { source, message, timestamp } = ev.data;
       let room = source;
+      let members = [source];
       if ( message.group != null ) {
         room = window.btoa(message.group.id);
+        members = message.group.members;
       }
       if(message.group && message.group.name) {
         console.log('added to new group');
@@ -80,7 +82,7 @@ class App extends MatrixPuppetBridgeBase {
       this.handleSignalMessage({
         roomId: room,
         senderId: source,
-      }, message, timestamp);
+      }, message, timestamp, members);
     });
 
     this.client.on('sent', (ev) => {
