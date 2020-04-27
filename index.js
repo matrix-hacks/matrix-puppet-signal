@@ -86,14 +86,16 @@ class App extends MatrixPuppetBridgeBase {
     this.client.on('sent', (ev) => {
       const { destination, message, timestamp } = ev.data;
       let room = destination;
+      let members = [destination];
       if ( message.group != null ) {
         room = window.btoa(message.group.id);
+        members = message.group.members;
       }
       this.handleSignalMessage({
         roomId: room,
         senderId: undefined,
         senderName: destination,
-      }, message, timestamp);
+      }, message, timestamp, members);
     });
 
     this.client.on('read', (ev) => {
@@ -166,8 +168,8 @@ class App extends MatrixPuppetBridgeBase {
 
     return this.client.start();
   }
-  handleSignalMessage(payload, message, timestamp) {
-    this.handleTypingEvent(payload.senderId, false, payload.room); // stop typing if message received
+  handleSignalMessage(payload, message, timeStamp, members = []) {
+    this.handleTypingEvent(payload.roomId, false, payload.roomId);
     if ( message.body ) {
       payload.text = message.body
     }
@@ -179,20 +181,37 @@ class App extends MatrixPuppetBridgeBase {
       if(payload.text == null) {
         return;
       }
-      return this.handleThirdPartyRoomMessage(payload);
+      this.handleThirdPartyRoomMessage(payload).then(matrixEventId => {
+        const matrixRoomId = this.getOrCreateMatrixRoomFromThirdPartyRoomId(payload.roomId).then(matrixRoomId => {
+          let message;
+          for ( let i = 0; i < members.length; i++ ) {
+    //         //Signal uses timestamp as message id, and looks up recipients by timestamp before finding the one for the receipt.
+    //         //Therefore we add it to the event store with roomId timestamp and eventId user, so we can find event later
+            message = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, members[i]);
+            this.bridge.getEventStore().upsertEvent(message);
+          }
+        });
+      });
     } else {
       for ( let i = 0; i < message.attachments.length; i++ ) {
         let att = message.attachments[i];
         this.client.downloadAttachment(att).then(data => {
           payload.buffer = new Buffer.from(data.data);
-		      payload.mimetype = data.contentType;
-          this.handleThirdPartyRoomMessageWithAttachment(payload);
+          payload.mimetype = data.contentType;
+          this.handleThirdPartyRoomMessageWithAttachment(payload).then(matrixEventId => {
+            const matrixRoomId = this.getOrCreateMatrixRoomFromThirdPartyRoomId(payload.roomId).then(matrixRoomId => {
+              let message;
+              for ( let i = 0; i < members.length; i++ ) {
+                message = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, members[i]);
+                this.bridge.getEventStore().upsertEvent(message);
+              }
+            });
+          });
         }); 
       }
-      return true;
     }
+    return true;
   }
-  //TODO:
   async handleTypingEvent(sender,status,group) {
     try {
       let id = sender;
@@ -201,11 +220,7 @@ class App extends MatrixPuppetBridgeBase {
       }
       const ghostIntent = await this.getIntentFromThirdPartySenderId(sender);
       const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(id);
-      // HACK: copy from matrix-appservice-bridge/lib/components/indent.js
-      // client can get timeout value, but intent does not support this yet.
-      await ghostIntent._ensureJoined(matrixRoomId);
-      await ghostIntent._ensureHasPowerLevelFor(matrixRoomId, "m.typing");
-      return ghostIntent.client.sendTyping(matrixRoomId, status, 60000);
+      return ghostIntent.sendTyping(matrixRoomId, status, 60000);
     } catch (err) {
       debug('could not send typing event', err.message);
     }
@@ -215,14 +230,10 @@ class App extends MatrixPuppetBridgeBase {
     try {
       //Get event and roomId from the eventstore
       const eventEntry = await this.bridge.getEventStore().getEntryByRemoteId(timeStamp, reader);
-      const event = eventEntry.get('ev');
       const matrixRoomId = eventEntry.getMatrixRoomId();
+      const matrixEventId = eventEntry.getMatrixEventId();
       const ghostIntent = await this.getIntentFromThirdPartySenderId(reader);
-      // HACK: copy from matrix-appservice-bridge/lib/components/indent.js
-      // client can get timeout value, but intent does not support this yet.
-      await ghostIntent._ensureJoined(matrixRoomId);
-      await ghostIntent._ensureHasPowerLevelFor(matrixRoomId, "m.read");
-      ghostIntent.client.sendReadReceipt (event);
+      ghostIntent.sendReadReceipt (matrixRoomId, matrixEventId);
     } catch (err) {
       debug('could not send read event', err.message);
     }
@@ -264,7 +275,7 @@ class App extends MatrixPuppetBridgeBase {
   }
 
   async sendTypingEventAsPuppetToThirdPartyRoomWithId(id, status) {
-      await this.client.sendTypingMessage(id, this.groups.has(id), status);
+      await this.client.sendTypingMessage(id, this.groups.has(id), status, config.sendTypingEvents);
   }
 
   sendImageMessageAsPuppetToThirdPartyRoomWithId(id, data) {
@@ -310,7 +321,7 @@ class App extends MatrixPuppetBridgeBase {
       for ( let i = 0; i < recipients.length; i++ ) {
         //Signal uses timestamp as message id, and looks up recipients by timestamp before finding the one for the receipt.
         //Therefore we add it to the event store with roomId timestamp and eventId user, so we can find event later
-        message = new StoredEvent(event.room_id, event.event_id, timeStamp, recipients[i], {ev: event});
+        message = new StoredEvent(event.room_id, event.event_id, timeStamp, recipients[i]);
         this.bridge.getEventStore().upsertEvent(message);
       }
     });
