@@ -214,8 +214,9 @@ class App extends MatrixPuppetBridgeBase {
   async handleSignalReadReceipt(timeStamp, reader) {
     try {
       //Get event and roomId from the eventstore
-      const event = this.bridge.getEventStore().getEntryByRemoteId(timeStamp, reader).get('ev');
-      const matrixRoomId = this.bridge.getEventStore().getEntryByRemoteId(timeStamp, reader).getMatrixRoomId();
+      const eventEntry = await this.bridge.getEventStore().getEntryByRemoteId(timeStamp, reader);
+      const event = eventEntry.get('ev');
+      const matrixRoomId = eventEntry.getMatrixRoomId();
       const ghostIntent = await this.getIntentFromThirdPartySenderId(reader);
       // HACK: copy from matrix-appservice-bridge/lib/components/indent.js
       // client can get timeout value, but intent does not support this yet.
