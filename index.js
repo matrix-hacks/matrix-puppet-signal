@@ -189,8 +189,10 @@ class App extends MatrixPuppetBridgeBase {
       payload.text = "";
     }
     if (!payload.senderName) {  //Make sure senders have a name so they show up.
-      const remoteUser = await this.getOrInitRemoteUserStoreDataFromThirdPartyUserId(payload.senderId);
-      payload.senderName = remoteUser.get('senderName');
+      if (payload.senderId) {
+        const remoteUser = await this.getOrInitRemoteUserStoreDataFromThirdPartyUserId(payload.senderId);
+        payload.senderName = remoteUser.get('senderName');
+      }
       if (!payload.senderName) {
         payload.senderName = "Unnamed";
       }
