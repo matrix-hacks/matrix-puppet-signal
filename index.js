@@ -179,7 +179,7 @@ class App extends MatrixPuppetBridgeBase {
 
     return this.client.start();
   }
-  await handleSignalMessage(payload, message, timeStamp, members = []) {
+  async handleSignalMessage(payload, message, timeStamp, members = []) {
     this.handleTypingEvent(payload.roomId, false, payload.roomId);
     if ( message.body ) {
       payload.text = message.body
