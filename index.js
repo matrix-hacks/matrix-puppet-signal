@@ -188,7 +188,9 @@ class App extends MatrixPuppetBridgeBase {
     else {
       payload.text = "";
     }
-    payload.senderName = payload.senderName || "Unnamed";  //Make sure senders have a name so they show up
+    if (!payload.senderName) {  //Make sure senders have a name so they show up
+      payload.senderName = "Unnamed";
+    }
     if ( message.attachments.length === 0 ) {
       if(payload.text == null) {
         return;
