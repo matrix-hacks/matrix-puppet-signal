@@ -232,10 +232,15 @@ class App extends MatrixPuppetBridgeBase {
     try {
       //Get event and roomId from the eventstore
       const eventEntry = await this.bridge.getEventStore().getEntryByRemoteId(timeStamp, reader);
-      const matrixRoomId = eventEntry.getMatrixRoomId();
-      const matrixEventId = eventEntry.getMatrixEventId();
-      const ghostIntent = await this.getIntentFromThirdPartySenderId(reader);
-      ghostIntent.sendReadReceipt (matrixRoomId, matrixEventId);
+      if (eventEntry) {
+        const matrixRoomId = eventEntry.getMatrixRoomId();
+        const matrixEventId = eventEntry.getMatrixEventId();
+        const ghostIntent = await this.getIntentFromThirdPartySenderId(reader);
+        ghostIntent.sendReadReceipt (matrixRoomId, matrixEventId);
+      }
+      else {
+        debug('no event found for', timeStamp, reader);
+      }
     } catch (err) {
       debug('could not send read event', err.message);
     }
