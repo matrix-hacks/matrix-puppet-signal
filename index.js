@@ -188,6 +188,7 @@ class App extends MatrixPuppetBridgeBase {
     else {
       payload.text = "";
     }
+    payload.senderName = payload.senderName || "Unnamed";  //Make sure senders have a name so they show up
     if ( message.attachments.length === 0 ) {
       if(payload.text == null) {
         return;
@@ -241,7 +242,7 @@ class App extends MatrixPuppetBridgeBase {
     try {
       //Get event and roomId from the eventstore
       const eventEntry = await this.bridge.getEventStore().getEntryByRemoteId(timeStamp, reader);
-      if (eventEntry) {
+      if (eventEntry != undefined && eventEntry != null) {
         const matrixRoomId = eventEntry.getMatrixRoomId();
         const matrixEventId = eventEntry.getMatrixEventId();
         const ghostIntent = await this.getIntentFromThirdPartySenderId(reader);
