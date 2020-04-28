@@ -270,7 +270,7 @@ class App extends MatrixPuppetBridgeBase {
     let topic = "Signal Direct Message";
     let avatar;
     if ( this.contacts.has(id) ) {
-      this.contacts.get(id).name;
+      name = this.contacts.get(id).name;
       avatar = this.contacts.get(id).avatar;
     }
     if ( this.groups.has(id) ) {
