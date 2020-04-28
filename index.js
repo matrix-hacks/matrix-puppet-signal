@@ -43,12 +43,15 @@ class App extends MatrixPuppetBridgeBase {
             this.groups.set(id, group);
             this.getOrCreateMatrixRoomFromThirdPartyRoomId(id).then((matrixRoomId) => {
               const otherPeople = message.group.members.filter(memb => !memb.e164.match(this.myNumber));
-              group.members = otherPeople;
+              group.members = [];
+              for (let i = 0; i < otherPeople.length; ++i) {
+                group.members.push(otherPeople[i].e164);
+              }
     
-              Promise.map(otherPeople, (member) => {
+              Promise.map(group.members, (member) => {
                 return this.getIntentFromThirdPartySenderId(member).then(ghost=>{
                   return this.puppet.getClient().invite(matrixRoomId, ghost.client.credentials.userId).then(() => {
-                    return ghost.join(matrixRoomId).then(()=>{
+                    return ghost._ensureJoined(matrixRoomId).then(()=>{
                       console.log('joined ghost', member);
                     }, (err)=>{
                       console.log('failed to join ghost', member, matrixRoomId, err);
@@ -62,12 +65,15 @@ class App extends MatrixPuppetBridgeBase {
           this.groups.set(id, group);
           this.getOrCreateMatrixRoomFromThirdPartyRoomId(id).then((matrixRoomId) => {
             const otherPeople = message.group.members.filter(memb => !memb.e164.match(this.myNumber));
-            group.members = otherPeople;
+            group.members = [];
+            for (let i = 0; i < otherPeople.length; ++i) {
+              group.members.push(otherPeople[i].e164);
+            }
   
-            Promise.map(otherPeople, (member) => {
+            Promise.map(group.members, (member) => {
               return this.getIntentFromThirdPartySenderId(member).then(ghost=>{
                 return this.puppet.getClient().invite(matrixRoomId, ghost.client.credentials.userId).then(() => {
-                  return ghost.join(matrixRoomId).then(()=>{
+                  return ghost._ensureJoined(matrixRoomId).then(()=>{
                     console.log('joined ghost', member);
                   }, (err)=>{
                     console.log('failed to join ghost', member, matrixRoomId, err);
@@ -120,13 +126,16 @@ class App extends MatrixPuppetBridgeBase {
       }
       this.groups.set(id, group);
       this.getOrCreateMatrixRoomFromThirdPartyRoomId(id).then((matrixRoomId) => {
-        const otherPeople = ev.groupDetails.members.filter(memb => !memb.e164(this.myNumber));
-        group.members = otherPeople;
-
-        Promise.map(otherPeople, (senderId) => {
+        const otherPeople = ev.groupDetails.members.filter(memb => !memb.e164.match(this.myNumber));
+        group.members = [];
+        for (let i = 0; i < otherPeople.length; ++i) {
+          group.members.push(otherPeople[i].e164);
+        }
+        
+        Promise.map(group.members, (senderId) => {
           return this.getIntentFromThirdPartySenderId(senderId).then(ghost=>{
             return this.puppet.getClient().invite(matrixRoomId, ghost.client.credentials.userId).then(() => {
-              return ghost.join(matrixRoomId).then(()=>{
+              return ghost._ensureJoined(matrixRoomId).then(()=>{
                 console.log('joined ghost', senderId);
               }, (err)=>{
                 console.log('failed to join ghost', senderId, matrixRoomId, err);
@@ -160,7 +169,7 @@ class App extends MatrixPuppetBridgeBase {
       console.log('typing event', sender, timestamp);
       let group = null;
       if(ev.typing.groupId) {
-        group = btoa(ev.typing.groupId);
+        group = window.btoa(ev.typing.groupId);
       }
       this.handleTypingEvent(sender,status,group);
     });
@@ -312,8 +321,6 @@ class App extends MatrixPuppetBridgeBase {
         let {timeStamp, recipients} = result;
         let message;
         for ( let i = 0; i < recipients.length; i++ ) {
-          //Signal uses timestamp as message id, and looks up recipients by timestamp before finding the one for the receipt.
-          //Therefore we add it to the event store with roomId timestamp and eventId user, so we can find event later
           message = new StoredEvent(data.room_id, data.event_id, timeStamp, recipients[i], {ev: data});
           this.bridge.getEventStore().upsertEvent(message);
         }
@@ -322,12 +329,13 @@ class App extends MatrixPuppetBridgeBase {
   }
 
   sendMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, text, event) {
+    if (this.groups.has(thirdPartyRoomId)) {
+      thirdPartyRoomId = window.atob(thirdPartyRoomId);
+    }
     return this.client.sendMessage(thirdPartyRoomId, this.groups.has(thirdPartyRoomId), text).then(result => {
       let {timeStamp, recipients} = result;
       let message;
       for ( let i = 0; i < recipients.length; i++ ) {
-        //Signal uses timestamp as message id, and looks up recipients by timestamp before finding the one for the receipt.
-        //Therefore we add it to the event store with roomId timestamp and eventId user, so we can find event later
         message = new StoredEvent(event.room_id, event.event_id, timeStamp, recipients[i]);
         this.bridge.getEventStore().upsertEvent(message);
       }
