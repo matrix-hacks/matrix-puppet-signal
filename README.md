@@ -77,7 +77,11 @@ Launch the bridge with `start.sh` or `node index.js`. If you want to run the bri
 
 
 ## FAQ
-See https://github.com/matrix-hacks/matrix-puppet-bridge
+See also https://github.com/matrix-hacks/matrix-puppet-bridge
+
+### I get Error: Cannot find module 'matrix-puppet-signal/node_modules/sqlite3/lib/binding/node-v72-linux-x64/node_sqlite3.node' while building the app
+Make sure you are using a new enough node version, either the newest (13.13.0 at the time of writing) or 12.13.0
+
 
 
 ## Discussion, Help and Support
