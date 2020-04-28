@@ -289,19 +289,25 @@ class App extends MatrixPuppetBridgeBase {
       return {senderName: id};
     }
   }
-  async sendReadReceiptAsPuppetToThirdPartyRoomWithId(id) {
+  async sendReadReceiptAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId) {
     let timeStamp = await new Date().getTime();
+    if (this.groups.has(thirdPartyRoomId)) {
+      thirdPartyRoomId = window.atob(thirdPartyRoomId);
+    }
     
-    console.log("sending read receipts for " + id);
+    console.log("sending read receipts for " + thirdPartyRoomId);
 
     // mark messages as read in your signal clients
-    await this.client.syncReadReceipts(id, this.groups.has(id), timeStamp, config.sendReadReceipts);
+    await this.client.syncReadReceipts(thirdPartyRoomId, this.groups.has(thirdPartyRoomId), timeStamp, config.sendReadReceipts);
 
     return true;
   }
 
-  async sendTypingEventAsPuppetToThirdPartyRoomWithId(id, status) {
-      await this.client.sendTypingMessage(id, this.groups.has(id), status, config.sendTypingEvents);
+  async sendTypingEventAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, status) {
+    if (this.groups.has(thirdPartyRoomId)) {
+      thirdPartyRoomId = window.atob(thirdPartyRoomId);
+    }
+      await this.client.sendTypingMessage(thirdPartyRoomId, this.groups.has(thirdPartyRoomId), status, config.sendTypingEvents);
   }
 
   sendImageMessageAsPuppetToThirdPartyRoomWithId(id, data) {
@@ -311,7 +317,7 @@ class App extends MatrixPuppetBridgeBase {
   sendFileMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, data) {
     data.text = "";
     if (this.groups.has(thirdPartyRoomId)) {
-      thirdPartyRoomId = window.atob(id);
+      thirdPartyRoomId = window.atob(thirdPartyRoomId);
     }
     return download.getTempfile(data.url, { tagFilename: true }).then(({path}) => {
       let file = fs.readFileSync(path);
