@@ -51,6 +51,7 @@ Open up your Signal app and go to Settings and then Linked Devices.
 You should see your camera preview open up.
 
 In the terminal, run `npm run link` and you should soon see a giant QR code. Scan that with Signal.
+As soon as no new messages appear on the terminal (SQL channel job ... (createOrUpdateSignedPreKey) succeeded in ...ms) you can ctrl+c out of the program and continue with configuring.
 
 If you get an error, restart the node process so that you can try with a different QR (it may have expired).
 
