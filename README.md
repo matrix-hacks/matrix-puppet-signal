@@ -76,6 +76,10 @@ Restart your HS.
 Launch the bridge with `start.sh` or `node index.js`. If you want to run the bridge as a service you can use the `matrix-puppet-signal.service` file as a template for every systemd based operating system.
 
 
+## FAQ
+See https://github.com/matrix-hacks/matrix-puppet-bridge
+
+
 ## Discussion, Help and Support
 
 Join us in the [![Matrix Puppet Bridge](https://user-images.githubusercontent.com/13843293/52007839-4b2f6580-24c7-11e9-9a6c-14d8fc0d0737.png)](https://matrix.to/#/#matrix-puppet-bridge:matrix.org) room
