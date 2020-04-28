@@ -42,7 +42,7 @@ class App extends MatrixPuppetBridgeBase {
             group.avatar = {type: 'image/jpeg', buffer: data.data};
             this.groups.set(id, group);
             this.getOrCreateMatrixRoomFromThirdPartyRoomId(id).then((matrixRoomId) => {
-              const otherPeople = message.group.members.filter(phoneNumber => !phoneNumber.match(this.myNumber));
+              const otherPeople = message.group.members.filter(memb => !memb.e164.match(this.myNumber));
               group.members = otherPeople;
     
               Promise.map(otherPeople, (member) => {
@@ -61,7 +61,7 @@ class App extends MatrixPuppetBridgeBase {
         } else {
           this.groups.set(id, group);
           this.getOrCreateMatrixRoomFromThirdPartyRoomId(id).then((matrixRoomId) => {
-            const otherPeople = message.group.members.filter(phoneNumber => !phoneNumber.match(this.myNumber));
+            const otherPeople = message.group.members.filter(memb => !memb.e164.match(this.myNumber));
             group.members = otherPeople;
   
             Promise.map(otherPeople, (member) => {
@@ -120,7 +120,7 @@ class App extends MatrixPuppetBridgeBase {
       }
       this.groups.set(id, group);
       this.getOrCreateMatrixRoomFromThirdPartyRoomId(id).then((matrixRoomId) => {
-        const otherPeople = ev.groupDetails.members.filter(phoneNumber => !phoneNumber.match(this.myNumber));
+        const otherPeople = ev.groupDetails.members.filter(memb => !memb.e164(this.myNumber));
         group.members = otherPeople;
 
         Promise.map(otherPeople, (senderId) => {
