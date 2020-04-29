@@ -36,7 +36,10 @@ class App extends MatrixPuppetBridgeBase {
         //Signal sends new groups as a message with a group name set
         //Messages in groups have a group but without name attached
         if(message.group.name != null) {
-          this.handleSignalGroup(message.group);
+          //We add it to the queue to make sure rooms get created before another message is being sent
+          messageQueue.add(() => {
+            return this.handleSignalGroup(message.group);
+          });
           return;
         }
         room = window.btoa(message.group.id);
@@ -56,7 +59,9 @@ class App extends MatrixPuppetBridgeBase {
       let members = [destination];
       if ( message.group != null ) {
         if(message.group.name != null) {
-          this.handleSignalGroup(message.group);
+          messageQueue.add(() => {
+            return this.handleSignalGroup(message.group);
+          });
           return;
         }
         room = window.btoa(message.group.id);
@@ -84,6 +89,7 @@ class App extends MatrixPuppetBridgeBase {
       if(!ev.groupDetails.active) {
         return;
       }
+      //No need for queue as no room will be created
       this.handleSignalGroup(ev.groupDetails);
     });
 
@@ -165,6 +171,7 @@ class App extends MatrixPuppetBridgeBase {
         }
       }
     }
+    return true;
   }
   
   async handleSignalMessage(payload, message, timeStamp, members = []) {
