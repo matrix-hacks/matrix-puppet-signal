@@ -30,63 +30,19 @@ class App extends MatrixPuppetBridgeBase {
 
     this.client.on('message', (ev) => {
       const { source, message, timestamp } = ev.data;
+      window.log.info("Got message", message);
+      window.log.info("Got group", message.group);
       let room = source;
       let members = [source];
       if ( message.group != null ) {
-        room = window.btoa(message.group.id);
-        members = message.group.members;
-      }
-      if(message.group && message.group.name) {
-        console.log('added to new group');
-        let id = window.btoa(message.group.id);
-        let group = { name: message.group.name };
-        if(message.group.avatar) {
-          this.client.downloadAttachment(message.group.avatar).then(data => {
-            group.avatar = {type: 'image/jpeg', buffer: data.data};
-            this.groups.set(id, group);
-            this.getOrCreateMatrixRoomFromThirdPartyRoomId(id).then((matrixRoomId) => {
-              const otherPeople = message.group.members.filter(memb => !memb.e164.match(this.myNumber));
-              group.members = [];
-              for (let i = 0; i < otherPeople.length; ++i) {
-                group.members.push(otherPeople[i].e164);
-              }
-    
-              Promise.map(group.members, (member) => {
-                return this.getIntentFromThirdPartySenderId(member).then(ghost=>{
-                  return this.puppet.getClient().invite(matrixRoomId, ghost.client.credentials.userId).then(() => {
-                    return ghost._ensureJoined(matrixRoomId).then(()=>{
-                      console.log('joined ghost', member);
-                    }, (err)=>{
-                      console.log('failed to join ghost', member, matrixRoomId, err);
-                    });
-                  });
-                });
-              });
-            });
-          });
-        } else {
-          this.groups.set(id, group);
-          this.getOrCreateMatrixRoomFromThirdPartyRoomId(id).then((matrixRoomId) => {
-            const otherPeople = message.group.members.filter(memb => !memb.e164.match(this.myNumber));
-            group.members = [];
-            for (let i = 0; i < otherPeople.length; ++i) {
-              group.members.push(otherPeople[i].e164);
-            }
-  
-            Promise.map(group.members, (member) => {
-              return this.getIntentFromThirdPartySenderId(member).then(ghost=>{
-                return this.puppet.getClient().invite(matrixRoomId, ghost.client.credentials.userId).then(() => {
-                  return ghost._ensureJoined(matrixRoomId).then(()=>{
-                    console.log('joined ghost', member);
-                  }, (err)=>{
-                    console.log('failed to join ghost', member, matrixRoomId, err);
-                  });
-                });
-              });
-            });
-          });
+        //Signal sends new groups as a message with a group name set
+        //Messages in groups have a group but without name attached
+        if(message.group.name != null) {
+          this.handleSignalGroup(message.group);
+          return;
         }
-        return;
+        room = window.btoa(message.group.id);
+        members = message.group.membersE164;
       }
       messageQueue.add(() => {
         return this.handleSignalMessage({
@@ -101,8 +57,12 @@ class App extends MatrixPuppetBridgeBase {
       let room = destination;
       let members = [destination];
       if ( message.group != null ) {
+        if(message.group.name != null) {
+          this.handleSignalGroup(message.group);
+          return;
+        }
         room = window.btoa(message.group.id);
-        members = message.group.members;
+        members = message.group.membersE164;
       }
       messageQueue.add(() => {
         return this.handleSignalMessage({
@@ -120,40 +80,17 @@ class App extends MatrixPuppetBridgeBase {
     });
 
     this.groups = new Map(); // abstract storage for groups
+    
     // triggered when we run syncGroups
     this.client.on('group', (ev) => {
-      console.log('group received', ev.groupDetails);
       if(!ev.groupDetails.active) {
         return;
       }
-      let id = window.btoa(ev.groupDetails.id);
-      let group = { name: ev.groupDetails.name };
-      if(ev.groupDetails.avatar) {
-        group.avatar = {type: 'image/jpeg', buffer: ev.groupDetails.avatar.data};
-      }
-      this.groups.set(id, group);
-      this.getOrCreateMatrixRoomFromThirdPartyRoomId(id).then((matrixRoomId) => {
-        const otherPeople = ev.groupDetails.members.filter(memb => !memb.e164.match(this.myNumber));
-        group.members = [];
-        for (let i = 0; i < otherPeople.length; ++i) {
-          group.members.push(otherPeople[i].e164);
-        }
-        
-        Promise.map(group.members, (senderId) => {
-          return this.getIntentFromThirdPartySenderId(senderId).then(ghost=>{
-            return this.puppet.getClient().invite(matrixRoomId, ghost.client.credentials.userId).then(() => {
-              return ghost._ensureJoined(matrixRoomId).then(()=>{
-                console.log('joined ghost', senderId);
-              }, (err)=>{
-                console.log('failed to join ghost', senderId, matrixRoomId, err);
-              });
-            });
-          });
-        });
-      });
+      this.handleSignalGroup(ev.groupDetails);
     });
 
     this.contacts = new Map();
+    
     this.client.on('contact', (ev) => {
       console.log('contact received', ev.contactDetails);
       let contact = {};
@@ -173,7 +110,7 @@ class App extends MatrixPuppetBridgeBase {
       let timestamp = ev.typing.timestamp;
       let sender = ev.sender;
       let status = ev.typing.started;
-      console.log('typing event', sender, timestamp);
+      console.log('typing event', sender, timestamp, status);
       let group = null;
       if(ev.typing.groupId) {
         group = window.btoa(ev.typing.groupId);
@@ -186,6 +123,43 @@ class App extends MatrixPuppetBridgeBase {
 
     return this.client.start();
   }
+  
+  async handleSignalGroup(groupDetails) {
+    console.log("Group received ", groupDetails);
+    let id = window.btoa(groupDetails.id);
+    if (groupDetails.name == "") {
+      groupDetails.name = "Unnamed Group";
+    }
+    let group = { name: groupDetails.name };
+    if(groupDetails.avatar) {
+      //If desktop knows the group it sends an array buffer
+      if (groupDetails.avatar.data) {
+        group.avatar = {type: 'image/jpeg', buffer: groupDetails.avatar.data};
+      }
+      //Otherwise we have to download it first
+      else {
+        const avData = await this.client.downloadAttachment(groupDetails.avatar);
+        group.avatar = {type: 'image/jpeg', buffer: avData.data};
+      }
+    }
+      
+    this.groups.set(id, group);
+    const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(id);
+    const otherPeople = groupDetails.membersE164.filter(phoneNumber => !phoneNumber.match(this.myNumber));
+
+    Promise.map(otherPeople, (member) => {
+      return this.getIntentFromThirdPartySenderId(member).then(ghost=>{
+        return this.puppet.getClient().invite(matrixRoomId, ghost.client.credentials.userId).then(() => {
+          return ghost._ensureJoined(matrixRoomId).then(()=>{
+            console.log('joined ghost', member);
+          }, (err)=>{
+            console.log('failed to join ghost', member, matrixRoomId, err);
+          });
+        });
+      });
+    });
+  }
+  
   async handleSignalMessage(payload, message, timeStamp, members = []) {
     this.handleTypingEvent(payload.roomId, false, payload.roomId);
     if ( message.body ) {
@@ -201,24 +175,24 @@ class App extends MatrixPuppetBridgeBase {
         payload.senderName = remoteUser.get('senderName');
       }
       if (!payload.senderName) {
-        payload.senderName = "Unnamed";
+        payload.senderName = "Unnamed Person";
       }
     }
     if (message.sticker != null) {  //TODO: correctly handle sticker in both directions
       payload.text = "Bridge Message: Stickers are not supported right now";
     }
     const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(payload.roomId);
+    let messageForEvent;
     if ( message.attachments.length === 0 ) {
       if(payload.text == null) {
         return;
       }
       const matrixEventId = await this.handleThirdPartyRoomMessage(payload);
-      let message;
       for ( let i = 0; i < members.length; i++ ) {
 //         //Signal uses timestamp as message id, and looks up recipients by timestamp before finding the one for the receipt.
 //         //Therefore we add it to the event store with roomId timestamp and eventId user, so we can find event later
-        message = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, members[i]);
-        this.bridge.getEventStore().upsertEvent(message);
+        messageForEvent = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, members[i]);
+        this.bridge.getEventStore().upsertEvent(messageForEvent);
       }
     } else {
       let data;
@@ -228,10 +202,9 @@ class App extends MatrixPuppetBridgeBase {
         payload.buffer = new Buffer.from(data.data);
         payload.mimetype = data.contentType;
         const matrixEventId = await this.handleThirdPartyRoomMessageWithAttachment(payload);
-        let message;
         for ( let i = 0; i < members.length; i++ ) {
-          message = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, members[i]);
-          this.bridge.getEventStore().upsertEvent(message);
+          messageForEvent = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, members[i]);
+          this.bridge.getEventStore().upsertEvent(messageForEvent);
         }
       }
     }
