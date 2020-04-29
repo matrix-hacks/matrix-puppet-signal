@@ -30,8 +30,6 @@ class App extends MatrixPuppetBridgeBase {
 
     this.client.on('message', (ev) => {
       const { source, message, timestamp } = ev.data;
-      window.log.info("Got message", message);
-      window.log.info("Got group", message.group);
       let room = source;
       let members = [source];
       if ( message.group != null ) {
