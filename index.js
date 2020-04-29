@@ -95,6 +95,12 @@ class App extends MatrixPuppetBridgeBase {
       contact.userId = ev.contactDetails.number;
       contact.senderName = ev.contactDetails.name;
       contact.name = ev.contactDetails.name;
+      if (contact.name == null) {
+        //If the unnamed sender allows us to use his profile name we will use this
+        this.client.getProfileNameForPhoneNumber(contact.userId).then(profileName => {
+          contact.name = profileName;
+        });
+      }
 
       if(ev.contactDetails.avatar) {
         let dataBuffer = Buffer.from(ev.contactDetails.avatar.data);
@@ -145,17 +151,20 @@ class App extends MatrixPuppetBridgeBase {
     const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(id);
     const otherPeople = groupDetails.membersE164.filter(phoneNumber => !phoneNumber.match(this.myNumber));
 
-    Promise.map(otherPeople, (member) => {
-      return this.getIntentFromThirdPartySenderId(member).then(ghost=>{
-        return this.puppet.getClient().invite(matrixRoomId, ghost.client.credentials.userId).then(() => {
-          return ghost._ensureJoined(matrixRoomId).then(()=>{
-            console.log('joined ghost', member);
-          }, (err)=>{
-            console.log('failed to join ghost', member, matrixRoomId, err);
-          });
-        });
-      });
-    });
+    for (let i = 0; i < otherPeople.length; ++i) {
+      let ghost = await this.getIntentFromThirdPartySenderId(otherPeople[i]);
+      const roomsGhost = await ghost.getClient().getJoinedRooms();
+      const hasGhostJoined = roomsGhost.joined_rooms.includes(matrixRoomId);
+      if (!hasGhostJoined) {
+        console.log("Letting member join room", otherPeople[i]);
+        try {
+          await this.puppet.getClient().invite(matrixRoomId, ghost.client.credentials.userId);
+          await ghost._ensureJoined(matrixRoomId);
+        } catch(err) {
+          console.log("failed to join ghost: ", otherPeople[i], matrixRoomId, err);
+        }
+      }
+    }
   }
   
   async handleSignalMessage(payload, message, timeStamp, members = []) {
@@ -167,10 +176,16 @@ class App extends MatrixPuppetBridgeBase {
     else {
       payload.text = "";
     }
+    
     if (!payload.senderName) {  //Make sure senders have a name so they show up.
       if (payload.senderId) {
         const remoteUser = await this.getOrInitRemoteUserStoreDataFromThirdPartyUserId(payload.senderId);
         payload.senderName = remoteUser.get('senderName');
+        if (!payload.senderName) {
+          //If the unnamed sender allows us to use his profile name we will use this after everything failed
+          const profileName = await this.client.getProfileNameForPhoneNumber(payload.senderId);
+          payload.senderName = profileName;
+        }
       }
       if (!payload.senderName) {
         payload.senderName = "Unnamed Person";
