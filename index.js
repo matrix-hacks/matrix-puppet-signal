@@ -103,7 +103,7 @@ class App extends MatrixPuppetBridgeBase {
       contact.name = ev.contactDetails.name;
       if (contact.name == null) {
         //If the unnamed sender allows us to use his profile name we will use this
-        this.client.getProfileNameForPhoneNumber(contact.userId).then(profileName => {
+        this.client.getProfileNameForId(contact.userId).then(profileName => {
           contact.name = profileName;
         });
       }
@@ -184,13 +184,20 @@ class App extends MatrixPuppetBridgeBase {
       payload.text = "";
     }
     
+    if (message.sticker != null) {  //TODO: correctly handle sticker in both directions
+      payload.text = "Bridge Message: Stickers are not supported right now";
+    }
+    if(message.reaction != null) {  //TODO: handle reactions
+      return;
+    }
+    
     if (!payload.senderName) {  //Make sure senders have a name so they show up.
       if (payload.senderId) {
         const remoteUser = await this.getOrInitRemoteUserStoreDataFromThirdPartyUserId(payload.senderId);
         payload.senderName = remoteUser.get('senderName');
         if (!payload.senderName) {
           //If the unnamed sender allows us to use his profile name we will use this after everything failed
-          const profileName = await this.client.getProfileNameForPhoneNumber(payload.senderId);
+          const profileName = await this.client.getProfileNameForId(payload.senderId);
           payload.senderName = profileName;
         }
       }
@@ -198,10 +205,14 @@ class App extends MatrixPuppetBridgeBase {
         payload.senderName = "Unnamed Person";
       }
     }
-    if (message.sticker != null) {  //TODO: correctly handle sticker in both directions
-      payload.text = "Bridge Message: Stickers are not supported right now";
+    //pictures as quotes cannot be handled in matrix so we ignore the quote
+    if (message.quote != null && message.attachments.length === 0) {
+      payload.quotedEventId = message.quote.id;
+      payload.quotedUserId = message.quote.author;   
+      payload.quotedText = message.quote.text;
     }
     const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(payload.roomId);
+    
     let messageForEvent;
     if ( message.attachments.length === 0 ) {
       if(payload.text == null) {
@@ -210,8 +221,8 @@ class App extends MatrixPuppetBridgeBase {
       const matrixEventId = await this.handleThirdPartyRoomMessage(payload);
       for ( let i = 0; i < members.length; i++ ) {
 //         //Signal uses timestamp as message id, and looks up recipients by timestamp before finding the one for the receipt.
-//         //Therefore we add it to the event store with roomId timestamp and eventId user, so we can find event later
-        messageForEvent = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, members[i]);
+//         //Therefore we add it to the event store with roomId timestamp and eventId userNumber, so we can find event later
+        messageForEvent = new StoredEvent(matrixRoomId, matrixEventId.event_id, timeStamp, members[i], {sentByMe: false});
         this.bridge.getEventStore().upsertEvent(messageForEvent);
       }
     } else {
@@ -223,7 +234,7 @@ class App extends MatrixPuppetBridgeBase {
         payload.mimetype = data.contentType;
         const matrixEventId = await this.handleThirdPartyRoomMessageWithAttachment(payload);
         for ( let i = 0; i < members.length; i++ ) {
-          messageForEvent = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, members[i]);
+          messageForEvent = new StoredEvent(matrixRoomId, matrixEventId.event_id, timeStamp, members[i], {sentByMe: false});
           this.bridge.getEventStore().upsertEvent(messageForEvent);
         }
       }
@@ -313,8 +324,10 @@ class App extends MatrixPuppetBridgeBase {
 
   sendFileMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, data) {
     data.text = "";
+    let isGroup = false;
     if (this.groups.has(thirdPartyRoomId)) {
       thirdPartyRoomId = window.atob(thirdPartyRoomId);
+      isGroup = true;
     }
     return download.getTempfile(data.url, { tagFilename: true }).then(({path}) => {
       let file = fs.readFileSync(path);
@@ -330,26 +343,77 @@ class App extends MatrixPuppetBridgeBase {
         fileName: data.filename,
         path: path,
       };
-      return this.client.sendMessage(thirdPartyRoomId, this.groups.has(thirdPartyRoomId), data.text, [attachment]).then(result => {
-        let {timeStamp, recipients} = result;
+      return this.client.sendMessage(thirdPartyRoomId, isGroup, data.text, [attachment]).then(result => {
+        let {timeStamp, members} = result;
         let message;
-        for ( let i = 0; i < recipients.length; i++ ) {
-          message = new StoredEvent(data.room_id, data.event_id, timeStamp, recipients[i], {ev: data});
+        
+        message = new StoredEvent(event.room_id, event.event_id, timeStamp, this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1), {sentByMe: true});
+        this.bridge.getEventStore().upsertEvent(message);
+        for ( let i = 0; i < members.length; i++ ) {
+          message = new StoredEvent(data.room_id, data.event_id, timeStamp, members[i], {sentByMe: true});
           this.bridge.getEventStore().upsertEvent(message);
         }
       });
     });
   }
 
-  sendMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, text, event) {
+  async sendMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, text, event) {
+    let isGroup = false;
     if (this.groups.has(thirdPartyRoomId)) {
       thirdPartyRoomId = window.atob(thirdPartyRoomId);
+      isGroup = true;
     }
-    return this.client.sendMessage(thirdPartyRoomId, this.groups.has(thirdPartyRoomId), text).then(result => {
-      let {timeStamp, recipients} = result;
+    //TODO: Make correct, dirty hack trying to find everything
+    let quote = null;
+    if (event.content.format == "org.matrix.custom.html" && event.content.formatted_body.includes("<mx-reply>")) {
+      const origFormated = event.content.formatted_body;
+      let start = origFormated.lastIndexOf("<mx-reply><blockquote><a href=\"")+1;
+      let end = origFormated.lastIndexOf("\">In reply to</a>");
+      let roomIdAndEventId = origFormated.substring(start, end);
+      const matrixRoomId = roomIdAndEventId.substring(
+        roomIdAndEventId.lastIndexOf("#/") + 2,
+        roomIdAndEventId.lastIndexOf("/")
+      );
+      
+      let end2 = roomIdAndEventId.lastIndexOf("?");
+      if (end2 > 0) {
+        end = end2;
+      }
+      const matrixEventId = roomIdAndEventId.substring(
+        roomIdAndEventId.lastIndexOf("/") + 1,
+        end
+      );
+      const eventEntry = await this.bridge.getEventStore().getEntryByMatrixId(matrixRoomId, matrixEventId);
+      if (eventEntry != null) {
+        const quotedTimestamp = eventEntry.getRemoteRoomId();
+        let quotedSenderNumber = eventEntry.getRemoteEventId();
+        //We only save the "room", so we need to check if we are quoting ourselves
+        if (eventEntry.get('sentByMe') == true) {
+          quotedSenderNumber = this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1);
+        }
+        
+        let startText = origFormated.lastIndexOf("</a><br>")+8;
+        let endText = origFormated.lastIndexOf("</blockquote>");
+        const quotedText = origFormated.substring(startText, endText);
+        quote = {
+          id: quotedTimestamp,
+          author: quotedSenderNumber,
+          authorUuid: null,
+          text: quotedText,
+          attachments: []
+        };
+        text = origFormated.substring(origFormated.lastIndexOf("</mx-reply>")+11);
+      }     
+    }
+    return this.client.sendMessage(thirdPartyRoomId, isGroup, text, [], quote).then(result => {
+      let {timeStamp, members} = result;
       let message;
-      for ( let i = 0; i < recipients.length; i++ ) {
-        message = new StoredEvent(event.room_id, event.event_id, timeStamp, recipients[i]);
+      //Save ourselves so we can quote that later
+      message = new StoredEvent(event.room_id, event.event_id, timeStamp, this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1), {sentByMe: true});
+      this.bridge.getEventStore().upsertEvent(message);
+      
+      for ( let i = 0; i < members.length; i++ ) {
+        message = new StoredEvent(event.room_id, event.event_id, timeStamp, members[i], {sentByMe: true});
         this.bridge.getEventStore().upsertEvent(message);
       }
     });
