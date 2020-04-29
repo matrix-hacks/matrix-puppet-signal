@@ -14,6 +14,9 @@ const debug = require('debug')('matrix-puppet:signal');
 let fs = require('fs');
 let Promise = require('bluebird');
 
+const {default: PQueue} = require('p-queue');
+const messageQueue = new PQueue({concurrency: 1});
+
 class App extends MatrixPuppetBridgeBase {
   getServicePrefix() {
     return "signal";
@@ -85,10 +88,12 @@ class App extends MatrixPuppetBridgeBase {
         }
         return;
       }
-      this.handleSignalMessage({
+      messageQueue.add(() => {
+        return this.handleSignalMessage({
         roomId: room,
         senderId: source,
-      }, message, timestamp, members);
+        }, message, timestamp, members);
+      })
     });
 
     this.client.on('sent', (ev) => {
@@ -99,11 +104,13 @@ class App extends MatrixPuppetBridgeBase {
         room = window.btoa(message.group.id);
         members = message.group.members;
       }
-      this.handleSignalMessage({
-        roomId: room,
-        senderId: undefined,
-        senderName: destination,
-      }, message, timestamp, members);
+      messageQueue.add(() => {
+        return this.handleSignalMessage({
+          roomId: room,
+          senderId: undefined,
+          senderName: destination,
+        }, message, timestamp, members);
+      })
     });
 
     this.client.on('read', (ev) => {
@@ -200,37 +207,32 @@ class App extends MatrixPuppetBridgeBase {
     if (message.sticker != null) {  //TODO: correctly handle sticker in both directions
       payload.text = "Bridge Message: Stickers are not supported right now";
     }
+    const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(payload.roomId);
     if ( message.attachments.length === 0 ) {
       if(payload.text == null) {
         return;
       }
-      this.handleThirdPartyRoomMessage(payload).then(matrixEventId => {
-        const matrixRoomId = this.getOrCreateMatrixRoomFromThirdPartyRoomId(payload.roomId).then(matrixRoomId => {
-          let message;
-          for ( let i = 0; i < members.length; i++ ) {
-    //         //Signal uses timestamp as message id, and looks up recipients by timestamp before finding the one for the receipt.
-    //         //Therefore we add it to the event store with roomId timestamp and eventId user, so we can find event later
-            message = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, members[i]);
-            this.bridge.getEventStore().upsertEvent(message);
-          }
-        });
-      });
+      const matrixEventId = await this.handleThirdPartyRoomMessage(payload);
+      let message;
+      for ( let i = 0; i < members.length; i++ ) {
+//         //Signal uses timestamp as message id, and looks up recipients by timestamp before finding the one for the receipt.
+//         //Therefore we add it to the event store with roomId timestamp and eventId user, so we can find event later
+        message = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, members[i]);
+        this.bridge.getEventStore().upsertEvent(message);
+      }
     } else {
+      let data;
       for ( let i = 0; i < message.attachments.length; i++ ) {
         let att = message.attachments[i];
-        this.client.downloadAttachment(att).then(data => {
-          payload.buffer = new Buffer.from(data.data);
-          payload.mimetype = data.contentType;
-          this.handleThirdPartyRoomMessageWithAttachment(payload).then(matrixEventId => {
-            const matrixRoomId = this.getOrCreateMatrixRoomFromThirdPartyRoomId(payload.roomId).then(matrixRoomId => {
-              let message;
-              for ( let i = 0; i < members.length; i++ ) {
-                message = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, members[i]);
-                this.bridge.getEventStore().upsertEvent(message);
-              }
-            });
-          });
-        }); 
+        data = await this.client.downloadAttachment(att);
+        payload.buffer = new Buffer.from(data.data);
+        payload.mimetype = data.contentType;
+        const matrixEventId = await this.handleThirdPartyRoomMessageWithAttachment(payload);
+        let message;
+        for ( let i = 0; i < members.length; i++ ) {
+          message = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, members[i]);
+          this.bridge.getEventStore().upsertEvent(message);
+        }
       }
     }
     return true;
@@ -309,7 +311,7 @@ class App extends MatrixPuppetBridgeBase {
     if (this.groups.has(thirdPartyRoomId)) {
       thirdPartyRoomId = window.atob(thirdPartyRoomId);
     }
-      await this.client.sendTypingMessage(thirdPartyRoomId, this.groups.has(thirdPartyRoomId), status, config.sendTypingEvents);
+    await this.client.sendTypingMessage(thirdPartyRoomId, this.groups.has(thirdPartyRoomId), status, config.sendTypingEvents);
   }
 
   sendImageMessageAsPuppetToThirdPartyRoomWithId(id, data) {
