@@ -82,12 +82,6 @@ class App extends MatrixPuppetBridgeBase {
       })
     });
 
-    this.client.on('read', (ev) => {
-      const { timestamp, reader } = ev.read;
-      console.log("read event", timestamp, reader);
-      this.handleSignalReadReceipt(timestamp, reader);
-    });
-
     this.groups = new Map(); // abstract storage for groups
     
     // triggered when we run syncGroups
@@ -122,6 +116,15 @@ class App extends MatrixPuppetBridgeBase {
       this.joinThirdPartyUsersToStatusRoom([contact]);
     });
 
+    setTimeout(this.client.syncContacts, 5000); // request for sync contacts
+    setTimeout(this.client.syncGroups, 10000); // request for sync groups
+
+    this.client.on('read', (ev) => {
+      const { timestamp, reader } = ev.read;
+      console.log("read event", timestamp, reader);
+      this.handleSignalReadReceipt(timestamp, reader);
+    });
+
     this.client.on('typing', (ev)=>{
       let timestamp = ev.typing.timestamp;
       let sender = ev.sender;
@@ -132,10 +135,7 @@ class App extends MatrixPuppetBridgeBase {
         group = window.btoa(ev.typing.groupId);
       }
       this.handleTypingEvent(sender,status,group);
-    });
-
-    setTimeout(this.client.syncContacts, 5000); // request for sync contacts
-    setTimeout(this.client.syncGroups, 10000); // request for sync groups
+    });    
 
     return this.client.start();
   }
@@ -190,12 +190,11 @@ class App extends MatrixPuppetBridgeBase {
     else {
       payload.text = "";
     }
-    
     //stickers seem to be just glorified pictures
     if (message.sticker != null) {
       message.attachments.push(message.sticker.data);
     }
-    if(message.reaction != null) {  //TODO: handle reactions
+    if(message.reaction != null) {  //TODO: handle reactions (not supported by sdk)
       return;
     }
     
@@ -269,7 +268,7 @@ class App extends MatrixPuppetBridgeBase {
     try {
       //Get event and roomId from the eventstore
       const eventEntry = await this.bridge.getEventStore().getEntryByRemoteId(timeStamp, reader);
-      if (eventEntry != undefined && eventEntry != null) {
+      if (eventEntry != null) {
         const matrixRoomId = eventEntry.getMatrixRoomId();
         const matrixEventId = eventEntry.getMatrixEventId();
         const ghostIntent = await this.getIntentFromThirdPartySenderId(reader);
@@ -327,6 +326,33 @@ class App extends MatrixPuppetBridgeBase {
     }
     await this.client.sendTypingMessage(thirdPartyRoomId, this.groups.has(thirdPartyRoomId), status, config.sendTypingEvents);
   }
+  
+  async sendReactionAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, data) {
+    try {
+      let isGroup = false;
+      if (this.groups.has(thirdPartyRoomId)) {
+        thirdPartyRoomId = window.atob(thirdPartyRoomId);
+        isGroup = true;
+      }
+      //Get event and roomId from the eventstore
+      const eventEntry = await this.bridge.getEventStore().getEntryByMatrixId(data.room_id, data.content["m.relates_to"].event_id);
+      if (eventEntry != null) {
+        let target = {
+          targetTimestamp: eventEntry.getRemoteRoomId(),
+          targetAuthorE164: eventEntry.getRemoteEventId(),
+        }
+        let reaction = {
+          emoji: data.content["m.relates_to"].key,
+        }
+        return this.client.sendReactionMessage(thirdPartyRoomId, isGroup, reaction, target);
+      }
+      else {
+        debug('no event found for', data.room_id, data.content["m.relates_to"].event_id);
+      }  
+    } catch (err) {
+      debug('could not send reaction', err.message);
+    }
+  }
 
   sendImageMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, info, data) {
     return this.sendFileMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, info, data);
@@ -356,21 +382,13 @@ class App extends MatrixPuppetBridgeBase {
       };
       return this.client.sendMessage(thirdPartyRoomId, isGroup, info.text, [finalizedAttachment]).then(result => {
         let {timeStamp, members} = result;
-        let message;
-        
-        message = new StoredEvent(data.room_id, data.event_id, timeStamp, this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1), {sentByMe: true});
-        this.bridge.getEventStore().upsertEvent(message);
-        
-        for ( let i = 0; i < members.length; i++ ) {
-          message = new StoredEvent(data.room_id, data.event_id, timeStamp, members[i], {sentByMe: true});
-          this.bridge.getEventStore().upsertEvent(message);
-        }
+        this.saveSendMessages(data.room_id, data.event_id, timeStamp, members);
       });
     });
   }
 
 //Gives unkonw quote if quoted message was image sent from signal with text and we try to quote it
-  async sendMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, text, event) {
+  async sendMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, text, data) {
     let isGroup = false;
     if (this.groups.has(thirdPartyRoomId)) {
       thirdPartyRoomId = window.atob(thirdPartyRoomId);
@@ -378,8 +396,8 @@ class App extends MatrixPuppetBridgeBase {
     }
     //TODO: Make correct, dirty hack trying to find everything
     let quote = null;
-    if (event.content.format == "org.matrix.custom.html" && event.content.formatted_body.includes("<mx-reply>")) {
-      const origFormated = event.content.formatted_body;
+    if (data.content.format == "org.matrix.custom.html" && data.content.formatted_body.includes("<mx-reply>")) {
+      const origFormated = data.content.formatted_body;
       //Getting first occurence of the reply which should be the directly quoted message
       let start = origFormated.indexOf("<mx-reply><blockquote><a href=\"")+1;
       let end = origFormated.indexOf("\">In reply to</a>");
@@ -428,16 +446,21 @@ class App extends MatrixPuppetBridgeBase {
     }
     return this.client.sendMessage(thirdPartyRoomId, isGroup, text, [], quote).then(result => {
       let {timeStamp, members} = result;
-      let message;
-      //Save ourselves so we can quote that later
-      message = new StoredEvent(event.room_id, event.event_id, timeStamp, this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1), {sentByMe: true});
-      this.bridge.getEventStore().upsertEvent(message);
-      
-      for ( let i = 0; i < members.length; i++ ) {
-        message = new StoredEvent(event.room_id, event.event_id, timeStamp, members[i], {sentByMe: true});
-        this.bridge.getEventStore().upsertEvent(message);
-      }
+      this.saveSendMessages(data.room_id, data.event_id, timeStamp, members);
     });
+  }
+  
+  saveSendMessages(matrixRoomId, matrixEventId, timeStamp, members) {
+    let message;
+    
+    //As we sent message we need to store ourselves as well
+    message = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1), {sentByMe: true});
+    this.bridge.getEventStore().upsertEvent(message);
+    
+    for ( let i = 0; i < members.length; i++ ) {
+      message = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, members[i], {sentByMe: true});
+      this.bridge.getEventStore().upsertEvent(message);
+    }
   }
 }
 
