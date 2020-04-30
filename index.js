@@ -347,7 +347,7 @@ class App extends MatrixPuppetBridgeBase {
         let {timeStamp, members} = result;
         let message;
         
-        message = new StoredEvent(event.room_id, event.event_id, timeStamp, this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1), {sentByMe: true});
+        message = new StoredEvent(data.room_id, data.event_id, timeStamp, this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1), {sentByMe: true});
         this.bridge.getEventStore().upsertEvent(message);
         for ( let i = 0; i < members.length; i++ ) {
           message = new StoredEvent(data.room_id, data.event_id, timeStamp, members[i], {sentByMe: true});
