@@ -43,7 +43,9 @@ class App extends MatrixPuppetBridgeBase {
           return;
         }
         room = window.btoa(message.group.id);
-        members = message.group.membersE164;
+        if ( this.groups.has(room) ) {
+          members = this.groups.get(room).members;
+        }
       }
       messageQueue.add(() => {
         return this.handleSignalMessage({
@@ -65,8 +67,12 @@ class App extends MatrixPuppetBridgeBase {
           return;
         }
         room = window.btoa(message.group.id);
-        members = message.group.membersE164;
+        if ( this.groups.has(room) ) {
+          members = this.groups.get(room).members;
+        }
       }
+      //As we sent it we need to be added to eventStore to be able to be quoted
+      members.push(this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1));
       messageQueue.add(() => {
         return this.handleSignalMessage({
           roomId: room,
@@ -152,10 +158,11 @@ class App extends MatrixPuppetBridgeBase {
         group.avatar = {type: 'image/jpeg', buffer: avData.data};
       }
     }
-      
-    this.groups.set(id, group);
     const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(id);
     const otherPeople = groupDetails.membersE164.filter(phoneNumber => !phoneNumber.match(this.myNumber));
+    group.members = otherPeople;
+      
+    this.groups.set(id, group);
 
     for (let i = 0; i < otherPeople.length; ++i) {
       let ghost = await this.getIntentFromThirdPartySenderId(otherPeople[i]);
@@ -210,6 +217,7 @@ class App extends MatrixPuppetBridgeBase {
       payload.quotedEventId = message.quote.id;
       payload.quotedUserId = message.quote.author;   
       payload.quotedText = message.quote.text;
+      payload.myUserId = this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1);
     }
     const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(payload.roomId);
     
@@ -219,10 +227,11 @@ class App extends MatrixPuppetBridgeBase {
         return;
       }
       const matrixEventId = await this.handleThirdPartyRoomMessage(payload);
+        
       for ( let i = 0; i < members.length; i++ ) {
 //         //Signal uses timestamp as message id, and looks up recipients by timestamp before finding the one for the receipt.
 //         //Therefore we add it to the event store with roomId timestamp and eventId userNumber, so we can find event later
-        messageForEvent = new StoredEvent(matrixRoomId, matrixEventId.event_id, timeStamp, members[i], {sentByMe: false});
+        messageForEvent = new StoredEvent(matrixRoomId, matrixEventId.event_id, timeStamp, members[i]);
         this.bridge.getEventStore().upsertEvent(messageForEvent);
       }
     } else {
@@ -234,7 +243,7 @@ class App extends MatrixPuppetBridgeBase {
         payload.mimetype = data.contentType;
         const matrixEventId = await this.handleThirdPartyRoomMessageWithAttachment(payload);
         for ( let i = 0; i < members.length; i++ ) {
-          messageForEvent = new StoredEvent(matrixRoomId, matrixEventId.event_id, timeStamp, members[i], {sentByMe: false});
+          messageForEvent = new StoredEvent(matrixRoomId, matrixEventId.event_id, timeStamp, members[i]);
           this.bridge.getEventStore().upsertEvent(messageForEvent);
         }
       }
@@ -318,37 +327,39 @@ class App extends MatrixPuppetBridgeBase {
     await this.client.sendTypingMessage(thirdPartyRoomId, this.groups.has(thirdPartyRoomId), status, config.sendTypingEvents);
   }
 
-  sendImageMessageAsPuppetToThirdPartyRoomWithId(id, data) {
-    return this.sendFileMessageAsPuppetToThirdPartyRoomWithId(id, data);
+  sendImageMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, info, data) {
+    return this.sendFileMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, info, data);
   }
 
-  sendFileMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, data) {
-    data.text = "";
+  sendFileMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, info, data) {
+    info.text = "";
     let isGroup = false;
     if (this.groups.has(thirdPartyRoomId)) {
       thirdPartyRoomId = window.atob(thirdPartyRoomId);
       isGroup = true;
     }
-    return download.getTempfile(data.url, { tagFilename: true }).then(({path}) => {
+    return download.getTempfile(info.url, { tagFilename: true }).then(({path}) => {
       let file = fs.readFileSync(path);
       let bufferArray = new Uint8Array(file).buffer;
       //We need to set a mimetype otherwise signal crashes
-      if (!data.mimetype) {
-        data.mimetype = "";
+      if (!info.mimetype) {
+        info.mimetype = "";
       }
-      let attachment = {
-        data: bufferArray,
+      let finalizedAttachment = {
+        info: bufferArray,
         size: file.byteLength,
-        contentType: data.mimetype,
-        fileName: data.filename,
+        contentType: info.mimetype,
+        fileName: info.filename,
         path: path,
+        data: bufferArray,
       };
-      return this.client.sendMessage(thirdPartyRoomId, isGroup, data.text, [attachment]).then(result => {
+      return this.client.sendMessage(thirdPartyRoomId, isGroup, info.text, [finalizedAttachment]).then(result => {
         let {timeStamp, members} = result;
         let message;
         
         message = new StoredEvent(data.room_id, data.event_id, timeStamp, this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1), {sentByMe: true});
         this.bridge.getEventStore().upsertEvent(message);
+        
         for ( let i = 0; i < members.length; i++ ) {
           message = new StoredEvent(data.room_id, data.event_id, timeStamp, members[i], {sentByMe: true});
           this.bridge.getEventStore().upsertEvent(message);
@@ -357,6 +368,7 @@ class App extends MatrixPuppetBridgeBase {
     });
   }
 
+//Gives unkonw quote if quoted message was image sent from signal with text and we try to quote it
   async sendMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, text, event) {
     let isGroup = false;
     if (this.groups.has(thirdPartyRoomId)) {
@@ -367,8 +379,9 @@ class App extends MatrixPuppetBridgeBase {
     let quote = null;
     if (event.content.format == "org.matrix.custom.html" && event.content.formatted_body.includes("<mx-reply>")) {
       const origFormated = event.content.formatted_body;
-      let start = origFormated.lastIndexOf("<mx-reply><blockquote><a href=\"")+1;
-      let end = origFormated.lastIndexOf("\">In reply to</a>");
+      //Getting first occurence of the reply which should be the directly quoted message
+      let start = origFormated.indexOf("<mx-reply><blockquote><a href=\"")+1;
+      let end = origFormated.indexOf("\">In reply to</a>");
       let roomIdAndEventId = origFormated.substring(start, end);
       const matrixRoomId = roomIdAndEventId.substring(
         roomIdAndEventId.lastIndexOf("#/") + 2,
@@ -392,9 +405,16 @@ class App extends MatrixPuppetBridgeBase {
           quotedSenderNumber = this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1);
         }
         
-        let startText = origFormated.lastIndexOf("</a><br>")+8;
-        let endText = origFormated.lastIndexOf("</blockquote>");
-        const quotedText = origFormated.substring(startText, endText);
+        
+        let endQuoteLinks = origFormated.lastIndexOf("</a><br>")+8;
+        let endQuote = origFormated.lastIndexOf("</mx-reply>");
+        let quotedText = origFormated.substring(endQuoteLinks, endQuote);
+      
+        let startQuote = quotedText.lastIndexOf("</mx-reply>");
+        if (startQuote > 0) {
+          quotedText = quotedText.substring(startQuote+11, quotedText.lastIndexOf("</blockquote>"));
+        }
+        
         quote = {
           id: quotedTimestamp,
           author: quotedSenderNumber,
@@ -402,7 +422,7 @@ class App extends MatrixPuppetBridgeBase {
           text: quotedText,
           attachments: []
         };
-        text = origFormated.substring(origFormated.lastIndexOf("</mx-reply>")+11);
+        text = origFormated.substring(endQuote+11);
       }     
     }
     return this.client.sendMessage(thirdPartyRoomId, isGroup, text, [], quote).then(result => {
