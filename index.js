@@ -191,8 +191,9 @@ class App extends MatrixPuppetBridgeBase {
       payload.text = "";
     }
     
-    if (message.sticker != null) {  //TODO: correctly handle sticker in both directions
-      payload.text = "Bridge Message: Stickers are not supported right now";
+    //stickers seem to be just glorified pictures
+    if (message.sticker != null) {
+      message.attachments.push(message.sticker.data);
     }
     if(message.reaction != null) {  //TODO: handle reactions
       return;
