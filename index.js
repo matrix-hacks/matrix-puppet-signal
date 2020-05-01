@@ -358,6 +358,14 @@ class App extends MatrixPuppetBridgeBase {
     return this.sendFileMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, info, data);
   }
 
+  sendAudioAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, info, data) {
+    return this.sendFileMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, info, data);
+  }
+
+  sendVideoAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, info, data) {
+    return this.sendFileMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, info, data);
+  }
+
   sendFileMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, info, data) {
     info.text = "";
     let isGroup = false;
