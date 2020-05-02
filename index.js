@@ -76,8 +76,9 @@ class App extends MatrixPuppetBridgeBase {
       messageQueue.add(() => {
         return this.handleSignalMessage({
           roomId: room,
+          //Flag for base to know it is sent from us
           senderId: undefined,
-          senderName: destination,
+          senderName: this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1),
         }, message, timestamp, members);
       })
     });
@@ -194,8 +195,44 @@ class App extends MatrixPuppetBridgeBase {
     if (message.sticker != null) {
       message.attachments.push(message.sticker.data);
     }
-    if(message.reaction != null) {  //TODO: handle reactions (not supported by sdk)
-      return;
+    if(message.reaction != null) {      
+      const reactionEventEntry = await this.bridge.getEventStore().getEntryByRemoteId(message.reaction.targetTimestamp.toNumber(), message.reaction.targetAuthorE164);
+      if (reactionEventEntry != null) {
+        payload.reaction = {
+          roomId: reactionEventEntry.getMatrixRoomId(),
+          eventId: reactionEventEntry.getMatrixEventId(),
+          emoji: message.reaction.emoji,
+        }
+      }
+      else {
+        debug("Did not find event for", message.reaction.targetTimestamp.toNumber(), message.reaction.targetAuthorE164);
+        return;
+      }
+//       reactions sent from us don't have a destination, therefore we need to set it to something (will not be used anyway)
+      if (payload.roomId == null) {
+        payload.roomId = message.reaction.targetAuthorE164;
+      }
+    }
+    
+    //pictures as quotes cannot be handled in matrix so we ignore the quote
+    if (message.quote != null && message.attachments.length === 0) {
+      
+      //Get eventId from the eventstore to look for the quote, always same room so no need for that one
+      const quotedEventEntry = await this.bridge.getEventStore().getEntryByRemoteId(message.quote.id, message.quote.author);
+      
+      if (quotedEventEntry != null) {
+        payload.quote = {
+          userId: message.quote.author,
+          eventId: quotedEventEntry.getMatrixEventId(),
+          text: message.quote.text,
+        };
+        if (message.quote.author == this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1)) {
+          payload.quote.userId = undefined;
+        }
+      }
+      else {
+        debug("Did not find event for", message.quote.id, message.quote.author);
+      }
     }
     
     if (!payload.senderName) {  //Make sure senders have a name so they show up.
@@ -212,15 +249,8 @@ class App extends MatrixPuppetBridgeBase {
         payload.senderName = "Unnamed Person";
       }
     }
-    //pictures as quotes cannot be handled in matrix so we ignore the quote
-    if (message.quote != null && message.attachments.length === 0) {
-      payload.quotedEventId = message.quote.id;
-      payload.quotedUserId = message.quote.author;   
-      payload.quotedText = message.quote.text;
-      payload.myUserId = this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1);
-    }
-    const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(payload.roomId);
     
+    const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(payload.roomId);
     let messageForEvent;
     if ( message.attachments.length === 0 ) {
       if(payload.text == null) {
