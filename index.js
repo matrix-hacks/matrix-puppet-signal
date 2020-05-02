@@ -159,11 +159,12 @@ class App extends MatrixPuppetBridgeBase {
         group.avatar = {type: 'image/jpeg', buffer: avData.data};
       }
     }
-    const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(id);
     const otherPeople = groupDetails.membersE164.filter(phoneNumber => !phoneNumber.match(this.myNumber));
     group.members = otherPeople;
       
     this.groups.set(id, group);
+    
+    const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(id);
 
     for (let i = 0; i < otherPeople.length; ++i) {
       let ghost = await this.getIntentFromThirdPartySenderId(otherPeople[i]);
@@ -195,7 +196,11 @@ class App extends MatrixPuppetBridgeBase {
     if (message.sticker != null) {
       message.attachments.push(message.sticker.data);
     }
-    if(message.reaction != null) {      
+    if (message.reaction != null) {   
+//       We ignore remove events (redactions not implemented)
+      if (message.reaction.remove == true) {
+        return;
+      }
       const reactionEventEntry = await this.bridge.getEventStore().getEntryByRemoteId(message.reaction.targetTimestamp.toNumber(), message.reaction.targetAuthorE164);
       if (reactionEventEntry != null) {
         payload.reaction = {
@@ -316,6 +321,7 @@ class App extends MatrixPuppetBridgeBase {
     let name = "";
     let topic = "Signal Direct Message";
     let avatar;
+    let direct = true;
     if ( this.contacts.has(id) ) {
       name = this.contacts.get(id).name;
       avatar = this.contacts.get(id).avatar;
@@ -324,8 +330,9 @@ class App extends MatrixPuppetBridgeBase {
       name = this.groups.get(id).name;
       topic = "Signal Group Message";
       avatar = this.groups.get(id).avatar;
+      direct = false;
     }
-    return Promise.resolve({name, topic, avatar, is_direct: false});
+    return Promise.resolve({name, topic, avatar, is_direct: direct});
   }
   getThirdPartyUserDataById(id) {
     if(this.contacts.has(id)) {
