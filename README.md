@@ -75,7 +75,7 @@ Edit your homeserver.yaml file and update the `app_service_config_files` with th
 
 Restart your HS.
 
-Launch the bridge with `start.sh` or `node index.js`. If you want to run the bridge as a service you can use the `matrix-puppet-signal.service` file as a template for every systemd based operating system.
+Launch the bridge with `start.sh` or `node index.js`. If you want to run the bridge as a service you can use the `matrix-puppet-signal.service` file as a template for every systemd based operating system. You need to at least adjust WorkingDirectory, ExecStart and User.
 
 
 ## FAQ
