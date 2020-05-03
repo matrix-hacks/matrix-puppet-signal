@@ -5,7 +5,7 @@ After=matrix-synapse.service
 [Service]
 Type=simple
 WorkingDirectory=/path/to/matrix-puppet-signal
-ExecStart=/path/to/matrix-puppet-signal/start.sh
+ExecStart=node /path/to/matrix-puppet-signal/index.js
 
 Restart=always
 RestartSec=10
@@ -13,7 +13,6 @@ StandardOutput=syslog
 StandardError=syslog
 SyslogIdentifier=matrix-puppet-signal
 
-EnvironmentFile=-/etc/default/matrix-puppet-signal
 PermissionsStartOnly=true
 LimitNOFILE=4096
 IgnoreSIGPIPE=false
