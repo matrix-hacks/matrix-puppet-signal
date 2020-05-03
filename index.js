@@ -96,7 +96,7 @@ class App extends MatrixPuppetBridgeBase {
 
     this.contacts = new Map();
     
-    this.client.on('contact', (ev) => {
+    this.client.on('contact', async (ev) => {
       console.log('contact received', ev.contactDetails);
       let contact = {};
       contact.userId = ev.contactDetails.number;
@@ -104,9 +104,7 @@ class App extends MatrixPuppetBridgeBase {
       contact.name = ev.contactDetails.name;
       if (contact.name == null) {
         //If the unnamed sender allows us to use his profile name we will use this
-        this.client.getProfileNameForId(contact.userId).then(profileName => {
-          contact.name = profileName;
-        });
+        contact.name = await this.client.getProfileNameForId(contact.userId);
       }
 
       if(ev.contactDetails.avatar) {
