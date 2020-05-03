@@ -114,7 +114,10 @@ class App extends MatrixPuppetBridgeBase {
         contact.avatar = {type: 'image/jpeg', buffer: dataBuffer};
       }
       this.contacts.set(ev.contactDetails.number, contact);
-      this.joinThirdPartyUsersToStatusRoom([contact]);
+      messageQueue.add(() => {
+        console.log('Adding contact to status room');
+        return this.joinThirdPartyUsersToStatusRoom([contact]);
+      });
     });
 
     setTimeout(this.client.syncContacts, 5000); // request for sync contacts
