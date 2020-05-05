@@ -1,3 +1,6 @@
+# THIS IS UNMAINTAINED!!!
+# PLEASE SEE https://github.com/witchent/matrix-puppet-signal
+
 # signal-bridge [![#matrix-puppet-bridge:matrix.org](https://img.shields.io/matrix/matrix-puppet-bridge:matrix.org.svg?label=%23matrix-puppet-bridge%3Amatrix.org&logo=matrix&server_fqdn=matrix.org)](https://matrix.to/#/#matrix-puppet-bridge:matrix.org)
 
 This is a Matrix bridge for Signal, messenger app by Open Whisper Systems.
