@@ -435,34 +435,14 @@ class App extends MatrixPuppetBridgeBase {
 
 //Gives unkonw quote if quoted message was image sent from signal with text and we try to quote it
   async sendMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, text, data) {
-    let isGroup = false;
-    if (this.groups.has(thirdPartyRoomId)) {
-      thirdPartyRoomId = window.atob(thirdPartyRoomId);
-      isGroup = true;
-    }
-    //TODO: Make correct, dirty hack trying to find everything
+
     let quote = null;
-    if (data.content.format == "org.matrix.custom.html" && data.content.formatted_body.includes("<mx-reply>")) {
-      const origFormated = data.content.formatted_body;
-      //Getting first occurence of the reply which should be the directly quoted message
-      let start = origFormated.indexOf("<mx-reply><blockquote><a href=\"")+1;
-      let end = origFormated.indexOf("\">In reply to</a>");
-      let roomIdAndEventId = origFormated.substring(start, end);
-      const matrixRoomId = roomIdAndEventId.substring(
-        roomIdAndEventId.lastIndexOf("#/") + 2,
-        roomIdAndEventId.lastIndexOf("/")
-      );
-      
-      let end2 = roomIdAndEventId.lastIndexOf("?");
-      if (end2 > 0) {
-        end = end2;
-      }
-      const matrixEventId = roomIdAndEventId.substring(
-        roomIdAndEventId.lastIndexOf("/") + 1,
-        end
-      );
+    if (data.content["m.relates_to"] && data.content["m.relates_to"]["m.in_reply_to"]) {
+      const matrixRoomId = data.room_id;
+      const matrixEventId = data.content["m.relates_to"]["m.in_reply_to"].event_id;
       const eventEntry = await this.bridge.getEventStore().getEntryByMatrixId(matrixRoomId, matrixEventId);
       if (eventEntry != null) {
+        
         const quotedTimestamp = eventEntry.getRemoteRoomId();
         let quotedSenderNumber = eventEntry.getRemoteEventId();
         //We only save the "room", so we need to check if we are quoting ourselves
@@ -470,11 +450,12 @@ class App extends MatrixPuppetBridgeBase {
           quotedSenderNumber = this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1);
         }
         
-        
+        const origFormated = data.content.formatted_body;        
         let endQuoteLinks = origFormated.lastIndexOf("</a><br>")+8;
-        let endQuote = origFormated.lastIndexOf("</mx-reply>");
+        let endQuote = origFormated.lastIndexOf("</blockquote></mx-reply>");
         let quotedText = origFormated.substring(endQuoteLinks, endQuote);
       
+        //TODO: Check if this is needed
         let startQuote = quotedText.lastIndexOf("</mx-reply>");
         if (startQuote > 0) {
           quotedText = quotedText.substring(startQuote+11, quotedText.lastIndexOf("</blockquote>"));
@@ -487,9 +468,17 @@ class App extends MatrixPuppetBridgeBase {
           text: quotedText,
           attachments: []
         };
-        text = origFormated.substring(endQuote+11);
+        text = origFormated.substring(endQuote+24);
+        
       }     
     }
+    
+    let isGroup = false;
+    if (this.groups.has(thirdPartyRoomId)) {
+      thirdPartyRoomId = window.atob(thirdPartyRoomId);
+      isGroup = true;
+    }
+    
     return this.client.sendMessage(thirdPartyRoomId, isGroup, text, [], quote).then(result => {
       let {timeStamp, members} = result;
       this.saveSendMessages(data.room_id, data.event_id, timeStamp, members);
