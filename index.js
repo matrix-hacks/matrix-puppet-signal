@@ -71,8 +71,6 @@ class App extends MatrixPuppetBridgeBase {
           members = this.groups.get(room).members;
         }
       }
-      //As we sent it we need to be added to eventStore to be able to be quoted
-      members.push(this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1));
       messageQueue.add(() => {
         return this.handleSignalMessage({
           roomId: room,
@@ -257,19 +255,12 @@ class App extends MatrixPuppetBridgeBase {
     }
     
     const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(payload.roomId);
-    let messageForEvent;
+    let matrixEventId;
     if ( message.attachments.length === 0 ) {
       if(payload.text == null) {
         return;
       }
-      const matrixEventId = await this.handleThirdPartyRoomMessage(payload);
-        
-      for ( let i = 0; i < members.length; i++ ) {
-//         //Signal uses timestamp as message id, and looks up recipients by timestamp before finding the one for the receipt.
-//         //Therefore we add it to the event store with roomId timestamp and eventId userNumber, so we can find event later
-        messageForEvent = new StoredEvent(matrixRoomId, matrixEventId.event_id, timeStamp, members[i], {sentByMe: sentMessage});
-        this.bridge.getEventStore().upsertEvent(messageForEvent);
-      }
+      matrixEventId = await this.handleThirdPartyRoomMessage(payload);
     } else {
       let data;
       for ( let i = 0; i < message.attachments.length; i++ ) {
@@ -277,13 +268,10 @@ class App extends MatrixPuppetBridgeBase {
         data = await this.client.downloadAttachment(att);
         payload.buffer = new Buffer.from(data.data);
         payload.mimetype = data.contentType;
-        const matrixEventId = await this.handleThirdPartyRoomMessageWithAttachment(payload);
-        for ( let i = 0; i < members.length; i++ ) {
-          messageForEvent = new StoredEvent(matrixRoomId, matrixEventId.event_id, timeStamp, members[i], {sentByMe: sentMessage});
-          this.bridge.getEventStore().upsertEvent(messageForEvent);
-        }
+        matrixEventId = await this.handleThirdPartyRoomMessageWithAttachment(payload);
       }
     }
+    saveMessageEvents(matrixRoomId, matrixEventId.event_id, timeStamp, members[i], sentMessage);
     return true;
   }
   async handleTypingEvent(sender,status,group) {
@@ -428,7 +416,7 @@ class App extends MatrixPuppetBridgeBase {
       };
       return this.client.sendMessage(thirdPartyRoomId, isGroup, info.text, [finalizedAttachment]).then(result => {
         let {timeStamp, members} = result;
-        this.saveSendMessages(data.room_id, data.event_id, timeStamp, members);
+        this.saveMessageEvents(data.room_id, data.event_id, timeStamp, members, true);
       });
     });
   }
@@ -481,19 +469,23 @@ class App extends MatrixPuppetBridgeBase {
     
     return this.client.sendMessage(thirdPartyRoomId, isGroup, text, [], quote).then(result => {
       let {timeStamp, members} = result;
-      this.saveSendMessages(data.room_id, data.event_id, timeStamp, members);
+      this.saveMessageEvents(data.room_id, data.event_id, timeStamp, members, true);
     });
   }
   
-  saveSendMessages(matrixRoomId, matrixEventId, timeStamp, members) {
+  
+  //Signal uses timestamp as message id, and looks up recipients by timestamp before finding the one for the receipt.
+  //Therefore we add it to the event store with roomId timestamp and eventId userNumber, so we can find event later
+  saveMessageEvents(matrixRoomId, matrixEventId, timeStamp, members, sentMessage = false) {
     let message;
     
     //As we sent message we need to store ourselves as well
-    message = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1), {sentByMe: true});
-    this.bridge.getEventStore().upsertEvent(message);
+    if (sentMessage == true) {
+      members.push(this.myNumber.substring(this.myNumber.lastIndexOf("\\") +1));
+    }
     
     for ( let i = 0; i < members.length; i++ ) {
-      message = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, members[i], {sentByMe: true});
+      message = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, members[i], {sentByMe: sentMessage});
       this.bridge.getEventStore().upsertEvent(message);
     }
   }
