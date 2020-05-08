@@ -271,7 +271,7 @@ class App extends MatrixPuppetBridgeBase {
         matrixEventId = await this.handleThirdPartyRoomMessageWithAttachment(payload);
       }
     }
-    saveMessageEvents(matrixRoomId, matrixEventId.event_id, timeStamp, members[i], sentMessage);
+    this.saveMessageEvents(matrixRoomId, matrixEventId.event_id, timeStamp, members[i], sentMessage);
     return true;
   }
   async handleTypingEvent(sender,status,group) {
