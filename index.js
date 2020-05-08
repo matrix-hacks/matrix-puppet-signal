@@ -43,9 +43,6 @@ class App extends MatrixPuppetBridgeBase {
           return;
         }
         room = window.btoa(message.group.id);
-        if ( this.groups.has(room) ) {
-          members = this.groups.get(room).members;
-        }
       }
       messageQueue.add(() => {
         return this.handleSignalMessage({
@@ -67,6 +64,7 @@ class App extends MatrixPuppetBridgeBase {
           return;
         }
         room = window.btoa(message.group.id);
+//We add all members to be able to correctly use read receipts
         if ( this.groups.has(room) ) {
           members = this.groups.get(room).members;
         }
@@ -183,7 +181,7 @@ class App extends MatrixPuppetBridgeBase {
   }
   
   async handleSignalMessage(payload, message, timeStamp, members = [], sentMessage = false) {
-    this.handleTypingEvent(payload.roomId, false, payload.roomId);
+    this.handleTypingEvent(payload.senderId, false, payload.roomId);
     if ( message.body ) {
       payload.text = message.body
     }
@@ -275,6 +273,10 @@ class App extends MatrixPuppetBridgeBase {
     return true;
   }
   async handleTypingEvent(sender,status,group) {
+    //We don't need to handle typing events from ourselves
+    if (!sender) {
+      return;
+    }
     try {
       let id = sender;
       if (group) {
@@ -421,7 +423,7 @@ class App extends MatrixPuppetBridgeBase {
     });
   }
 
-//Gives unkonw quote if quoted message was image sent from signal with text and we try to quote it
+//Gives unknown quote if quoted message was image sent from signal with text and we try to quote it
   async sendMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, text, data) {
 
     let quote = null;
