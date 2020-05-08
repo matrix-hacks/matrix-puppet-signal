@@ -461,6 +461,9 @@ class App extends MatrixPuppetBridgeBase {
         text = origFormated.substring(endQuote+24);
         
       }     
+      else {
+        debug('no event found for', matrixRoomId, matrixEventId);
+      }
     }
     
     let isGroup = false;
