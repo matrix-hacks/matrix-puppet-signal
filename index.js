@@ -15,7 +15,9 @@ let fs = require('fs');
 let Promise = require('bluebird');
 
 const {default: PQueue} = require('p-queue');
-const messageQueue = new PQueue({concurrency: 1});
+//We start the queue after initializing bridge and client
+//It makes sure all events from signal are handled in the correct order
+const signalQueue = new PQueue({concurrency: 1, autoStart: false});
 
 class App extends MatrixPuppetBridgeBase {
   getServicePrefix() {
@@ -37,14 +39,14 @@ class App extends MatrixPuppetBridgeBase {
         //Messages in groups have a group but without name attached
         if(message.group.name != null) {
           //We add it to the queue to make sure rooms get created before another message is being sent
-          messageQueue.add(() => {
+          signalQueue.add(() => {
             return this.handleSignalGroup(message.group);
           });
           return;
         }
         room = window.btoa(message.group.id);
       }
-      messageQueue.add(() => {
+      signalQueue.add(() => {
         return this.handleSignalMessage({
         roomId: room,
         senderId: source,
@@ -58,7 +60,7 @@ class App extends MatrixPuppetBridgeBase {
       let members = [destination];
       if ( message.group != null ) {
         if(message.group.name != null) {
-          messageQueue.add(() => {
+          signalQueue.add(() => {
             return this.handleSignalGroup(message.group);
           });
           return;
@@ -69,7 +71,7 @@ class App extends MatrixPuppetBridgeBase {
           members = this.groups.get(room).members;
         }
       }
-      messageQueue.add(() => {
+      signalQueue.add(() => {
         return this.handleSignalMessage({
           roomId: room,
           //Flag for base to know it is sent from us
@@ -86,8 +88,9 @@ class App extends MatrixPuppetBridgeBase {
       if(!ev.groupDetails.active) {
         return;
       }
-      //No need for queue as no room will be created
-      this.handleSignalGroup(ev.groupDetails);
+      signalQueue.add(() => {
+        return this.handleSignalGroup(ev.groupDetails);
+      });
     });
 
     this.contacts = new Map();
@@ -96,11 +99,14 @@ class App extends MatrixPuppetBridgeBase {
       console.log('contact received', ev.contactDetails);
       let contact = {};
       contact.userId = ev.contactDetails.number;
-      contact.senderName = ev.contactDetails.name;
-      contact.name = ev.contactDetails.name;
-      if (contact.name == null) {
+      if (ev.contactDetails.name != null) {
+        contact.senderName = ev.contactDetails.name;
+        contact.name = ev.contactDetails.name;
+      }
+      else {
         //If the unnamed sender allows us to use his profile name we will use this
         contact.name = await this.client.getProfileNameForId(contact.userId);
+        contact.senderName = await this.client.getProfileNameForId(contact.userId);
       }
 
       if(ev.contactDetails.avatar) {
@@ -108,19 +114,16 @@ class App extends MatrixPuppetBridgeBase {
         contact.avatar = {type: 'image/jpeg', buffer: dataBuffer};
       }
       this.contacts.set(ev.contactDetails.number, contact);
-      messageQueue.add(() => {
-        console.log('Adding contact to status room');
-        return this.joinThirdPartyUsersToStatusRoom([contact]);
-      });
+      
+      return this.joinThirdPartyUsersToStatusRoom([contact]);
     });
-
-    setTimeout(this.client.syncContacts, 5000); // request for sync contacts
-    setTimeout(this.client.syncGroups, 10000); // request for sync groups
 
     this.client.on('read', (ev) => {
       const { timestamp, reader } = ev.read;
       console.log("read event", timestamp, reader);
-      this.handleSignalReadReceipt(timestamp, reader);
+      signalQueue.add(() => {
+        return this.handleSignalReadReceipt(timestamp, reader);
+      });
     });
 
     this.client.on('typing', (ev)=>{
@@ -132,8 +135,20 @@ class App extends MatrixPuppetBridgeBase {
       if(ev.typing.groupId) {
         group = window.btoa(ev.typing.groupId);
       }
-      this.handleTypingEvent(sender,status,group);
+      signalQueue.add(() => {
+        this.handleTypingEvent(sender,status,group);
+      });
     });    
+    
+    //Request sync before doing anything else with the client
+    signalQueue.add(() => {
+      console.log("Syncing contacts");
+      return this.client.syncContacts();
+    });
+    signalQueue.add(() => {
+      console.log("Syncing groups");
+      return this.client.syncGroups();
+    });
 
     return this.client.start();
   }
@@ -328,7 +343,6 @@ class App extends MatrixPuppetBridgeBase {
   getThirdPartyUserDataById(id) {
     if(this.contacts.has(id)) {
       let contact = this.contacts.get(id);
-      contact.is_direct = true;
       return contact;
     } else {
       return {senderName: id};
@@ -460,7 +474,7 @@ class App extends MatrixPuppetBridgeBase {
         };
         text = origFormated.substring(endQuote+24);
         
-      }     
+      }
       else {
         debug('no event found for', matrixRoomId, matrixEventId);
       }
@@ -522,6 +536,7 @@ new Cli({
     }).then(()=>{
       return app.bridge.run(port, config);
     }).then(()=>{
+      signalQueue.start();
       console.log('Matrix-side listening on port %s', port);
     }).catch(err=>{
       console.error(err.message);
