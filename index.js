@@ -150,17 +150,27 @@ class App extends MatrixPuppetBridgeBase {
       contact.senderName = "Unnamed Person";
     }
 
-    if(contactDetails.avatar) {
-      let dataBuffer = Buffer.from(contactDetails.avatar.data);
-      contact.avatar = {type: 'image/jpeg', buffer: dataBuffer};
+    const signalAvatarPath = await this.client.getPathForAvatar(contactDetails.number, false);
+    if (signalAvatarPath != null) {
+      contact.avatar = signalAvatarPath;
+    }
+    else if(contactDetails.avatar) {
+      let avatarBuffer = Buffer.from(contactDetails.avatar.data);
+      const fileName = contactDetails.number.replace(/[^a-zA-Z0-9]/g, '');
+      fs.writeFileSync(process.cwd() + '/data/' + fileName, avatarBuffer);
+      group.avatar = process.cwd() + '/data/' + fileName;
     }
     
     const userStore = this.bridge.getUserStore();
     let rUser = await userStore.getRemoteUser(contact.userId);
     if ( rUser ) {
-        rUser.set('name', contact.name);
-        rUser.set('avatar', contact.avatar);
-        await userStore.setRemoteUser(rUser);
+      //If we saved it temporary so far we delete the old file
+      if (rUser.get('avatar') && !rUser.get('avatar').includes("attachments.noindex")) {
+        fs.unlinkSync(rUser.get('avatar'));
+      }
+      rUser.set('name', contact.name);
+      rUser.set('avatar', contact.avatar);
+      await userStore.setRemoteUser(rUser);
     }
     else {
       //To differentiate between user and groups
@@ -194,16 +204,24 @@ class App extends MatrixPuppetBridgeBase {
       groupDetails.name = "Unnamed Group";
     }
     let group = { name: groupDetails.name };
-    if(groupDetails.avatar) {
+    const signalAvatarPath = await this.client.getPathForAvatar(groupDetails.id, true);
+    if (signalAvatarPath != null) {
+      group.avatar = signalAvatarPath;
+    }
+    else if(groupDetails.avatar) {
+      let avatarBuffer;
       //If desktop knows the group it sends an array buffer
       if (groupDetails.avatar.data) {
-        group.avatar = {type: 'image/jpeg', buffer: groupDetails.avatar.data};
+        avatarBuffer = Buffer.from(groupDetails.avatar.data);
       }
       //Otherwise we have to download it first
       else {
         const avData = await this.client.downloadAttachment(groupDetails.avatar);
-        group.avatar = {type: 'image/jpeg', buffer: avData.data};
+        avatarBuffer = Buffer.from(avData.data);
       }
+      const fileName = contactDetails.number.replace(/[^a-zA-Z0-9]/g, '');
+      fs.writeFileSync(process.cwd() + '/data/' + fileName, avatarBuffer);
+      group.avatar = process.cwd() + '/data/' + fileName;
     }
     const otherPeople = groupDetails.membersE164.filter(phoneNumber => !phoneNumber.match(this.myNumber));
     group.members = otherPeople;
@@ -213,6 +231,9 @@ class App extends MatrixPuppetBridgeBase {
     let rGroup = await userStore.getRemoteUser(id);
     if ( rGroup ) {
       if ( rGroup.get('isGroup') == true) {
+        if (rGroup.get('avatar') && !rGroup.get('avatar').includes("attachments.noindex")) {
+          fs.unlinkSync(rGroup.get('avatar'));
+        }
         rGroup.set('name', group.name);
         rGroup.set('avatar', group.avatar);
         rGroup.set('members', group.members);
@@ -384,7 +405,11 @@ class App extends MatrixPuppetBridgeBase {
     const room = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
     if ( room ) {
       name = room.get('name');
-      avatar = room.get('avatar');
+      let avatarPath = room.get('avatar');
+      if (avatarPath) {
+        let file = fs.readFileSync(avatarPath);
+        avatar = {type: 'image/jpeg', buffer: new Uint8Array(file).buffer };        
+      }
       if (room.get('isGroup') == true) {
         topic = "Signal Group Message";
         direct = false;
@@ -395,7 +420,7 @@ class App extends MatrixPuppetBridgeBase {
   async getThirdPartyUserDataById(thirdPartyRoomId) {
     const contact = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
     if ( contact && contact.get('isGroup') == false ) {
-      return contact;
+      return { senderName: contact.senderName };
     } else {
       return {senderName: thirdPartyRoomId};
     }
