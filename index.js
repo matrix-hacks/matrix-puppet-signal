@@ -600,7 +600,7 @@ class App extends MatrixPuppetBridgeBase {
     }
   }
   
-  sendLeavingEventAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, data) {
+  async sendLeavingEventAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, data) {
     const room = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
     if ( room && room.get('isGroup') == true) {
       thirdPartyRoomId = window.atob(thirdPartyRoomId);
