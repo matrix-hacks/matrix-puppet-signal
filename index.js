@@ -96,55 +96,7 @@ class App extends MatrixPuppetBridgeBase {
     this.client.on('contact', (ev) => {
       //Makes startup slower but ensures all contacts are synced as we have no race in joining status room
       signalQueue.add(async () => {
-        console.log('contact received', ev.contactDetails);
-        let contact = {};
-        contact.userId = ev.contactDetails.number;
-        if (ev.contactDetails.name != null) {
-          contact.senderName = ev.contactDetails.name;
-          contact.name = ev.contactDetails.name;
-        }
-        else {
-          //If the unnamed sender allows us to use his profile name we will use this
-          contact.name = await this.client.getProfileNameForId(contact.userId);
-          contact.senderName = await this.client.getProfileNameForId(contact.userId);
-        }
-        if (!contact.name) {
-          contact.name = "Unnamed Person";
-          contact.senderName = "Unnamed Person";
-        }
-
-        if(ev.contactDetails.avatar) {
-          let dataBuffer = Buffer.from(ev.contactDetails.avatar.data);
-          contact.avatar = {type: 'image/jpeg', buffer: dataBuffer};
-        }
-        
-        const userStore = this.bridge.getUserStore();
-        let rUser = await userStore.getRemoteUser(contact.userId);
-        if ( rUser ) {
-            rUser.set('name', contact.name);
-            rUser.set('avatar', contact.avatar);
-            await userStore.setRemoteUser(rUser);
-        }
-        else {
-          await userStore.setRemoteUser(new RemoteUser(contact.userId, contact));
-        }
-        
-        let retry = 3;
-        let lastError;
-        let timeOut = 100;
-        while (retry--) {
-          try {
-            return await this.joinThirdPartyUsersToStatusRoom([contact]);
-          } catch(err) {
-            lastError = err;
-          }
-          if (lastError.errcode == 'M_LIMIT_EXCEEDED' && lastError.data.retry_after_ms) {
-            console.log("Matrix forces us to wait for ", lastError.data.retry_after_ms);
-            timeOut = lastError.data.retry_after_ms;
-          }            
-          await sleep(timeOut);
-        }
-        console.log("Could not join user to status room, error:", lastError);
+        return this.handleSignalContact(ev.contactDetails);
       });
     });
 
@@ -179,6 +131,59 @@ class App extends MatrixPuppetBridgeBase {
     });
 
     return this.client.start();
+  }
+  
+  async handleSignalContact(contactDetails) {
+    console.log('contact received', contactDetails);
+    let contact = {};
+    contact.userId = contactDetails.number;
+    if (contactDetails.name != null) {
+      contact.senderName = contactDetails.name;
+      contact.name = contactDetails.name;
+    }
+    else {
+      //If the unnamed sender allows us to use his profile name we will use this
+      contact.name = await this.client.getProfileNameForId(contact.userId);
+      contact.senderName = await this.client.getProfileNameForId(contact.userId);
+    }
+    if (!contact.name) {
+      contact.name = "Unnamed Person";
+      contact.senderName = "Unnamed Person";
+    }
+
+    if(contactDetails.avatar) {
+      let dataBuffer = Buffer.from(contactDetails.avatar.data);
+      contact.avatar = {type: 'image/jpeg', buffer: dataBuffer};
+    }
+    
+    const userStore = this.bridge.getUserStore();
+    let rUser = await userStore.getRemoteUser(contact.userId);
+    if ( rUser ) {
+        rUser.set('name', contact.name);
+        rUser.set('avatar', contact.avatar);
+        await userStore.setRemoteUser(rUser);
+    }
+    else {
+      await userStore.setRemoteUser(new RemoteUser(contact.userId, contact));
+    }
+    
+    let retry = 3;
+    let lastError;
+    let timeOut = 100;
+    while (retry--) {
+      try {
+        return await this.joinThirdPartyUsersToStatusRoom([contact]);
+      } catch(err) {
+        lastError = err;
+      }
+      if (lastError.errcode == 'M_LIMIT_EXCEEDED' && lastError.data.retry_after_ms) {
+        console.log("Matrix forces us to wait for ", lastError.data.retry_after_ms);
+        timeOut = lastError.data.retry_after_ms;
+      }            
+      await sleep(timeOut);
+    }
+    console.log("Could not join user to status room, error:", lastError);
+    return;
   }
   
   async handleSignalGroup(groupDetails) {
