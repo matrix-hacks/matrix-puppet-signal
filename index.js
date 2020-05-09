@@ -1,10 +1,10 @@
 const {
   MatrixAppServiceBridge: {
-    Cli, AppServiceRegistration, EventBridgeStore, StoredEvent
+    Cli, AppServiceRegistration, EventBridgeStore, StoredEvent, RemoteUser, UserBridgeStore
   },
   Puppet,
   MatrixPuppetBridgeBase,
-  utils: { download }
+  utils: { download, sleep }
 } = require("matrix-puppet-bridge");
 const SignalClient = require('signal-client');
 const config = require('./config.json');
@@ -93,31 +93,59 @@ class App extends MatrixPuppetBridgeBase {
       });
     });
     
-    this.client.on('contact', async (ev) => {
-      console.log('contact received', ev.contactDetails);
-      let contact = {};
-      if (ev.contactDetails.name != null) {
-        contact.senderName = ev.contactDetails.name;
-        contact.name = ev.contactDetails.name;
-      }
-      else {
-        //If the unnamed sender allows us to use his profile name we will use this
-        contact.name = await this.client.getProfileNameForId(contact.userId);
-        contact.senderName = await this.client.getProfileNameForId(contact.userId);
-      }
-      if (!contact.name) {
-        contact.name = "Unnamed Person";
-        contact.senderName = "Unnamed Person";
-      }
+    this.client.on('contact', (ev) => {
+      //Makes startup slower but ensures all contacts are synced as we have no race in joining status room
+      signalQueue.add(async () => {
+        console.log('contact received', ev.contactDetails);
+        let contact = {};
+        contact.userId = ev.contactDetails.number;
+        if (ev.contactDetails.name != null) {
+          contact.senderName = ev.contactDetails.name;
+          contact.name = ev.contactDetails.name;
+        }
+        else {
+          //If the unnamed sender allows us to use his profile name we will use this
+          contact.name = await this.client.getProfileNameForId(contact.userId);
+          contact.senderName = await this.client.getProfileNameForId(contact.userId);
+        }
+        if (!contact.name) {
+          contact.name = "Unnamed Person";
+          contact.senderName = "Unnamed Person";
+        }
 
-      if(ev.contactDetails.avatar) {
-        let dataBuffer = Buffer.from(ev.contactDetails.avatar.data);
-        contact.avatar = {type: 'image/jpeg', buffer: dataBuffer};
-      }
-      
-      await this.bridge.getUserStore().setRemoteUser(new RemoteUser(ev.contactDetails.number, contact));
-      
-      return this.joinThirdPartyUsersToStatusRoom([contact]);
+        if(ev.contactDetails.avatar) {
+          let dataBuffer = Buffer.from(ev.contactDetails.avatar.data);
+          contact.avatar = {type: 'image/jpeg', buffer: dataBuffer};
+        }
+        
+        const userStore = this.bridge.getUserStore();
+        let rUser = await userStore.getRemoteUser(contact.userId);
+        if ( rUser ) {
+            rUser.set('name', contact.name);
+            rUser.set('avatar', contact.avatar);
+            await userStore.setRemoteUser(rUser);
+        }
+        else {
+          await userStore.setRemoteUser(new RemoteUser(contact.userId, contact));
+        }
+        
+        let retry = 3;
+        let lastError;
+        let timeOut = 100;
+        while (retry--) {
+          try {
+            return await this.joinThirdPartyUsersToStatusRoom([contact]);
+          } catch(err) {
+            lastError = err;
+          }
+          if (lastError.errcode == 'M_LIMIT_EXCEEDED' && lastError.data.retry_after_ms) {
+            console.log("Matrix forces us to wait for ", lastError.data.retry_after_ms);
+            timeOut = lastError.data.retry_after_ms;
+          }            
+          await sleep(timeOut);
+        }
+        console.log("Could not join user to status room, error:", lastError);
+      });
     });
 
     this.client.on('read', (ev) => {
@@ -145,9 +173,7 @@ class App extends MatrixPuppetBridgeBase {
     
     this.client.on('client_ready', () => {
       //Request sync and start handling of signal stuff
-      console.log("Syncing contacts");
       this.client.syncContacts();
-      console.log("Syncing groups");
       this.client.syncGroups();
       signalQueue.start();
     });
