@@ -204,24 +204,28 @@ class App extends MatrixPuppetBridgeBase {
       groupDetails.name = "Unnamed Group";
     }
     let group = { name: groupDetails.name };
-    const signalAvatarPath = await this.client.getPathForAvatar(groupDetails.id, true);
-    if (signalAvatarPath != null) {
-      group.avatar = signalAvatarPath;
-    }
-    else if(groupDetails.avatar) {
+    if(groupDetails.avatar) {
       let avatarBuffer;
       //If desktop knows the group it sends an array buffer
       if (groupDetails.avatar.data) {
-        avatarBuffer = Buffer.from(groupDetails.avatar.data);
+        //We would prefer to use existing avatar
+        const signalAvatarPath = await this.client.getPathForAvatar(groupDetails.id, true);
+        if (signalAvatarPath != null) {
+          group.avatar = signalAvatarPath;
+        }
+        else {
+          const fileName = contactDetails.number.replace(/[^a-zA-Z0-9]/g, '');
+          fs.writeFileSync(process.cwd() + '/data/' + fileName, Buffer.from(groupDetails.avatar.data));
+          group.avatar = process.cwd() + '/data/' + fileName;
+        }
       }
-      //Otherwise we have to download it first
+      //New group, we have to download the avatar first
       else {
         const avData = await this.client.downloadAttachment(groupDetails.avatar);
-        avatarBuffer = Buffer.from(avData.data);
+        const fileName = contactDetails.number.replace(/[^a-zA-Z0-9]/g, '');
+        fs.writeFileSync(process.cwd() + '/data/' + fileName, Buffer.from(avData.data));
+        group.avatar = process.cwd() + '/data/' + fileName;
       }
-      const fileName = contactDetails.number.replace(/[^a-zA-Z0-9]/g, '');
-      fs.writeFileSync(process.cwd() + '/data/' + fileName, avatarBuffer);
-      group.avatar = process.cwd() + '/data/' + fileName;
     }
     const otherPeople = groupDetails.membersE164.filter(phoneNumber => !phoneNumber.match(this.myNumber));
     group.members = otherPeople;
@@ -594,6 +598,14 @@ class App extends MatrixPuppetBridgeBase {
       message = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, members[i], {sentByMe: sentMessage});
       this.bridge.getEventStore().upsertEvent(message);
     }
+  }
+  
+  sendLeavingEventAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, data) {
+    const room = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
+    if ( room && room.get('isGroup') == true) {
+      thirdPartyRoomId = window.atob(thirdPartyRoomId);
+      this.client.leaveGroup(thirdPartyRoomId);
+    }    
   }
 }
 
