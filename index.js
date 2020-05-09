@@ -15,7 +15,7 @@ let fs = require('fs');
 let Promise = require('bluebird');
 
 const {default: PQueue} = require('p-queue');
-//We start the queue after initializing bridge and client
+//We start the queue after client is ready
 //It makes sure all events from signal are handled in the correct order
 const signalQueue = new PQueue({concurrency: 1, autoStart: false});
 
@@ -140,14 +140,14 @@ class App extends MatrixPuppetBridgeBase {
       });
     });    
     
-    //Request sync before doing anything else with the client
-    signalQueue.add(() => {
+    
+    this.client.on('client_ready', () => {
+      //Request sync and start handling of signal stuff
       console.log("Syncing contacts");
-      return this.client.syncContacts();
-    });
-    signalQueue.add(() => {
+      this.client.syncContacts();
       console.log("Syncing groups");
-      return this.client.syncGroups();
+      this.client.syncGroups();
+      signalQueue.start();
     });
 
     return this.client.start();
@@ -536,7 +536,6 @@ new Cli({
     }).then(()=>{
       return app.bridge.run(port, config);
     }).then(()=>{
-      signalQueue.start();
       console.log('Matrix-side listening on port %s', port);
     }).catch(err=>{
       console.error(err.message);
