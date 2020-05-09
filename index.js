@@ -54,7 +54,7 @@ class App extends MatrixPuppetBridgeBase {
       })
     });
 
-    this.client.on('sent', (ev) => {
+    this.client.on('sent', async (ev) => {
       const { destination, message, timestamp } = ev.data;
       let room = destination;
       let members = [destination];
@@ -67,9 +67,9 @@ class App extends MatrixPuppetBridgeBase {
         }
         room = window.btoa(message.group.id);
 //We add all members to be able to correctly use read receipts
-        const room = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
-        if ( room && room.isGroup == true) {
-          members = room.members;
+        const rRoom = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
+        if ( rRoom && rRoom.get('isGroup') == true) {
+          members = rRoom.members;
         }
       }
       signalQueue.add(() => {
@@ -216,7 +216,7 @@ class App extends MatrixPuppetBridgeBase {
         rGroup.set('name', group.name);
         rGroup.set('avatar', group.avatar);
         rGroup.set('members', group.members);
-        await userStore.setRemoteUser(rUser);
+        await userStore.setRemoteUser(rGroup);
       }
       else {
         console.error("There seems to be a user with the same id as a new group");
@@ -375,7 +375,7 @@ class App extends MatrixPuppetBridgeBase {
       debug('could not send read event', err.message);
     }
   }
-
+// 
   async getThirdPartyRoomDataById(thirdPartyRoomId) {
     let name = "";
     let topic = "Signal Direct Message";
@@ -385,7 +385,7 @@ class App extends MatrixPuppetBridgeBase {
     if ( room ) {
       name = room.get('name');
       avatar = room.get('avatar');
-      if (room.isGroup == true) {
+      if (room.get('isGroup') == true) {
         topic = "Signal Group Message";
         direct = false;
       }
@@ -394,7 +394,7 @@ class App extends MatrixPuppetBridgeBase {
   }
   async getThirdPartyUserDataById(thirdPartyRoomId) {
     const contact = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
-    if ( contact && contact.isGroup == false ) {
+    if ( contact && contact.get('isGroup') == false ) {
       return contact;
     } else {
       return {senderName: thirdPartyRoomId};
@@ -404,7 +404,7 @@ class App extends MatrixPuppetBridgeBase {
     let timeStamp = await new Date().getTime();
     let isGroup = false;
     const room = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
-    if ( room && room.isGroup == true) {
+    if ( room && room.get('isGroup') == true) {
       thirdPartyRoomId = window.atob(thirdPartyRoomId);
       isGroup = true;
     }
@@ -420,7 +420,7 @@ class App extends MatrixPuppetBridgeBase {
   async sendTypingEventAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, status) {
     let isGroup = false;
     const room = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
-    if ( room && room.isGroup == true) {
+    if ( room && room.get('isGroup') == true) {
       thirdPartyRoomId = window.atob(thirdPartyRoomId);
       isGroup = true;
     }
@@ -432,7 +432,7 @@ class App extends MatrixPuppetBridgeBase {
     try {
       let isGroup = false;
       const room = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
-      if ( room && room.isGroup == true) {
+      if ( room && room.get('isGroup') == true) {
         thirdPartyRoomId = window.atob(thirdPartyRoomId);
         isGroup = true;
       }
@@ -468,11 +468,11 @@ class App extends MatrixPuppetBridgeBase {
     return this.sendFileMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, info, data);
   }
 
-  sendFileMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, info, data) {
+  async sendFileMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, info, data) {
     info.text = "";
     let isGroup = false;
     const room = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
-    if ( room && room.isGroup == true) {
+    if ( room && room.get('isGroup') == true) {
       thirdPartyRoomId = window.atob(thirdPartyRoomId);
       isGroup = true;
     }
@@ -543,7 +543,7 @@ class App extends MatrixPuppetBridgeBase {
     
     let isGroup = false;
     const room = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
-    if ( room && room.isGroup == true) {
+    if ( room && room.get('isGroup') == true) {
       thirdPartyRoomId = window.atob(thirdPartyRoomId);
       isGroup = true;
     }
