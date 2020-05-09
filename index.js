@@ -92,13 +92,10 @@ class App extends MatrixPuppetBridgeBase {
         return this.handleSignalGroup(ev.groupDetails);
       });
     });
-
-    this.contacts = new Map();
     
     this.client.on('contact', async (ev) => {
       console.log('contact received', ev.contactDetails);
       let contact = {};
-      contact.userId = ev.contactDetails.number;
       if (ev.contactDetails.name != null) {
         contact.senderName = ev.contactDetails.name;
         contact.name = ev.contactDetails.name;
@@ -108,12 +105,17 @@ class App extends MatrixPuppetBridgeBase {
         contact.name = await this.client.getProfileNameForId(contact.userId);
         contact.senderName = await this.client.getProfileNameForId(contact.userId);
       }
+      if (!contact.name) {
+        contact.name = "Unnamed Person";
+        contact.senderName = "Unnamed Person";
+      }
 
       if(ev.contactDetails.avatar) {
         let dataBuffer = Buffer.from(ev.contactDetails.avatar.data);
         contact.avatar = {type: 'image/jpeg', buffer: dataBuffer};
       }
-      this.contacts.set(ev.contactDetails.number, contact);
+      
+      await this.bridge.getUserStore().setRemoteUser(new RemoteUser(ev.contactDetails.number, contact));
       
       return this.joinThirdPartyUsersToStatusRoom([contact]);
     });
@@ -252,6 +254,7 @@ class App extends MatrixPuppetBridgeBase {
       }
     }
     
+    //TODO: Still needed? Checking when getting contacts anyway
     if (!payload.senderName) {  //Make sure senders have a name so they show up.
       if (payload.senderId) {
         const remoteUser = await this.getOrInitRemoteUserStoreDataFromThirdPartyUserId(payload.senderId);
@@ -323,14 +326,15 @@ class App extends MatrixPuppetBridgeBase {
     }
   }
 
-  getThirdPartyRoomDataById(id) {
+  async getThirdPartyRoomDataById(id) {
     let name = "";
     let topic = "Signal Direct Message";
     let avatar;
     let direct = true;
-    if ( this.contacts.has(id) ) {
-      name = this.contacts.get(id).name;
-      avatar = this.contacts.get(id).avatar;
+    const contact = this.bridge.getUserStore().getRemoteUser(id);
+    if ( contact ) {
+      name = contact.get('name');
+      avatar = contact.get('avatar');
     }
     if ( this.groups.has(id) ) {
       name = this.groups.get(id).name;
@@ -341,8 +345,8 @@ class App extends MatrixPuppetBridgeBase {
     return Promise.resolve({name, topic, avatar, is_direct: direct});
   }
   getThirdPartyUserDataById(id) {
-    if(this.contacts.has(id)) {
-      let contact = this.contacts.get(id);
+    const contact = this.bridge.getUserStore().getRemoteUser(id);
+    if ( contact ) {
       return contact;
     } else {
       return {senderName: id};
