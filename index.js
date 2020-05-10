@@ -158,7 +158,7 @@ class App extends MatrixPuppetBridgeBase {
       let avatarBuffer = Buffer.from(contactDetails.avatar.data);
       const fileName = contactDetails.number.replace(/[^a-zA-Z0-9]/g, '');
       fs.writeFileSync(process.cwd() + '/data/' + fileName, avatarBuffer);
-      group.avatar = process.cwd() + '/data/' + fileName;
+      contact.avatar = process.cwd() + '/data/' + fileName;
     }
     
     const userStore = this.bridge.getUserStore();
@@ -183,7 +183,7 @@ class App extends MatrixPuppetBridgeBase {
     let timeOut = 100;
     while (retry--) {
       try {
-        return await this.joinThirdPartyUsersToStatusRoom([contact]);
+        return await this.joinThirdPartyUsersToStatusRoom([getThirdPartyUserDataById(contact.userId)]);
       } catch(err) {
         lastError = err;
       }
@@ -412,7 +412,7 @@ class App extends MatrixPuppetBridgeBase {
       let avatarPath = room.get('avatar');
       if (avatarPath) {
         let file = fs.readFileSync(avatarPath);
-        avatar = {type: 'image/jpeg', buffer: new Uint8Array(file).buffer };        
+        avatar = {type: 'image/jpeg', buffer: new Uint8Array(file) };        
       }
       if (room.get('isGroup') == true) {
         topic = "Signal Group Message";
@@ -422,9 +422,11 @@ class App extends MatrixPuppetBridgeBase {
     return Promise.resolve({name, topic, avatar, is_direct: direct});
   }
   async getThirdPartyUserDataById(thirdPartyRoomId) {
-    const contact = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
+    let contact = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
     if ( contact && contact.get('isGroup') == false ) {
-      return { senderName: contact.senderName };
+      let file = fs.readFileSync(avatarPath);
+      contact.avatar = {type: 'image/jpeg', buffer: new Uint8Array(file) };
+      return contact;
     } else {
       return {senderName: thirdPartyRoomId};
     }
