@@ -169,6 +169,7 @@ class App extends MatrixPuppetBridgeBase {
         fs.unlinkSync(rUser.get('avatar'));
       }
       rUser.set('name', contact.name);
+      rUser.set('senderName', contact.senderName);
       rUser.set('avatar', contact.avatar);
       await userStore.setRemoteUser(rUser);
     }
@@ -183,7 +184,9 @@ class App extends MatrixPuppetBridgeBase {
     let timeOut = 100;
     while (retry--) {
       try {
-        return await this.joinThirdPartyUsersToStatusRoom([getThirdPartyUserDataById(contact.userId)]);
+        //Get avatar as data array instead of path
+        contact = await this.getThirdPartyUserDataById(contact.userId);
+        return await this.joinThirdPartyUsersToStatusRoom([contact]);
       } catch(err) {
         lastError = err;
       }
@@ -424,9 +427,12 @@ class App extends MatrixPuppetBridgeBase {
   async getThirdPartyUserDataById(thirdPartyRoomId) {
     let contact = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
     if ( contact && contact.get('isGroup') == false ) {
-      let file = fs.readFileSync(avatarPath);
-      contact.avatar = {type: 'image/jpeg', buffer: new Uint8Array(file) };
-      return contact;
+      let avatarPath = contact.get('avatar');
+      if (avatarPath) {
+        let file = fs.readFileSync(avatarPath);
+        contact.data.avatar = {type: 'image/jpeg', buffer: new Uint8Array(file) };        
+      }
+      return contact.data;
     } else {
       return {senderName: thirdPartyRoomId};
     }
