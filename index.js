@@ -217,7 +217,7 @@ class App extends MatrixPuppetBridgeBase {
           group.avatar = signalAvatarPath;
         }
         else {
-          const fileName = contactDetails.number.replace(/[^a-zA-Z0-9]/g, '');
+          const fileName = id.replace(/[^a-zA-Z0-9]/g, '');
           fs.writeFileSync(process.cwd() + '/data/' + fileName, Buffer.from(groupDetails.avatar.data));
           group.avatar = process.cwd() + '/data/' + fileName;
         }
@@ -225,7 +225,7 @@ class App extends MatrixPuppetBridgeBase {
       //New group, we have to download the avatar first
       else {
         const avData = await this.client.downloadAttachment(groupDetails.avatar);
-        const fileName = contactDetails.number.replace(/[^a-zA-Z0-9]/g, '');
+        const fileName = id.replace(/[^a-zA-Z0-9]/g, '');
         fs.writeFileSync(process.cwd() + '/data/' + fileName, Buffer.from(avData.data));
         group.avatar = process.cwd() + '/data/' + fileName;
       }
