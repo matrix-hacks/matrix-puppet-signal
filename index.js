@@ -165,7 +165,7 @@ class App extends MatrixPuppetBridgeBase {
     let rUser = await userStore.getRemoteUser(contact.userId);
     if ( rUser ) {
       //If we saved it temporary so far we delete the old file
-      if (rUser.get('avatar') && !rUser.get('avatar').includes("attachments.noindex")) {
+      if (rUser.get('avatar') && !rUser.get('avatar').includes("attachments.noindex") && !(rUser.get('avatar') != contact.avatar)) {
         fs.unlinkSync(rUser.get('avatar'));
       }
       rUser.set('name', contact.name);
@@ -238,7 +238,7 @@ class App extends MatrixPuppetBridgeBase {
     let rGroup = await userStore.getRemoteUser(id);
     if ( rGroup ) {
       if ( rGroup.get('isGroup') == true) {
-        if (rGroup.get('avatar') && !rGroup.get('avatar').includes("attachments.noindex")) {
+        if (rGroup.get('avatar') && !rGroup.get('avatar').includes("attachments.noindex") && !(rGroup.get('avatar') != group.avatar)) {
           fs.unlinkSync(rGroup.get('avatar'));
         }
         rGroup.set('name', group.name);
