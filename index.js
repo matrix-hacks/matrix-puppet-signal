@@ -370,7 +370,7 @@ class App extends MatrixPuppetBridgeBase {
   }
   async handleTypingEvent(sender,status,group) {
     //We don't need to handle typing events from ourselves
-    if (!sender) {
+    if (!sender || sender.match(this.myNumber)) {
       return;
     }
     try {
