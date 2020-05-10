@@ -608,12 +608,14 @@ class App extends MatrixPuppetBridgeBase {
     }
   }
   
+//Signal-desktop does not seem to handlit leaving correctly, waiting for upstream fix or better idea
   async sendLeavingEventAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, data) {
-    const room = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
-    if ( room && room.get('isGroup') == true) {
-      thirdPartyRoomId = window.atob(thirdPartyRoomId);
-      this.client.leaveGroup(thirdPartyRoomId);
-    }    
+    console.log("Ignoring leave event as it is buggy right now");
+//    const room = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
+//    if ( room && room.get('isGroup') == true) {
+//      thirdPartyRoomId = window.atob(thirdPartyRoomId);
+//      this.client.leaveGroup(thirdPartyRoomId);
+//    }    
   }
 }
 
