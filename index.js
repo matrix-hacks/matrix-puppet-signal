@@ -1,10 +1,10 @@
 const {
   MatrixAppServiceBridge: {
-    Cli, AppServiceRegistration, EventBridgeStore, StoredEvent
+    Cli, AppServiceRegistration, EventBridgeStore, StoredEvent, RemoteUser, UserBridgeStore
   },
   Puppet,
   MatrixPuppetBridgeBase,
-  utils: { download }
+  utils: { download, sleep }
 } = require("matrix-puppet-bridge");
 const SignalClient = require('signal-client');
 const config = require('./config.json');
@@ -15,7 +15,9 @@ let fs = require('fs');
 let Promise = require('bluebird');
 
 const {default: PQueue} = require('p-queue');
-const messageQueue = new PQueue({concurrency: 1});
+//We start the queue after client is ready
+//It makes sure all events from signal are handled in the correct order
+const signalQueue = new PQueue({concurrency: 1, autoStart: false});
 
 class App extends MatrixPuppetBridgeBase {
   getServicePrefix() {
@@ -37,14 +39,14 @@ class App extends MatrixPuppetBridgeBase {
         //Messages in groups have a group but without name attached
         if(message.group.name != null) {
           //We add it to the queue to make sure rooms get created before another message is being sent
-          messageQueue.add(() => {
+          signalQueue.add(() => {
             return this.handleSignalGroup(message.group);
           });
           return;
         }
         room = window.btoa(message.group.id);
       }
-      messageQueue.add(() => {
+      signalQueue.add(() => {
         return this.handleSignalMessage({
         roomId: room,
         senderId: source,
@@ -52,24 +54,25 @@ class App extends MatrixPuppetBridgeBase {
       })
     });
 
-    this.client.on('sent', (ev) => {
+    this.client.on('sent', async (ev) => {
       const { destination, message, timestamp } = ev.data;
       let room = destination;
       let members = [destination];
       if ( message.group != null ) {
         if(message.group.name != null) {
-          messageQueue.add(() => {
+          signalQueue.add(() => {
             return this.handleSignalGroup(message.group);
           });
           return;
         }
         room = window.btoa(message.group.id);
 //We add all members to be able to correctly use read receipts
-        if ( this.groups.has(room) ) {
-          members = this.groups.get(room).members;
+        const rRoom = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
+        if ( rRoom && rRoom.get('isGroup') == true) {
+          members = rRoom.members;
         }
       }
-      messageQueue.add(() => {
+      signalQueue.add(() => {
         return this.handleSignalMessage({
           roomId: room,
           //Flag for base to know it is sent from us
@@ -79,48 +82,29 @@ class App extends MatrixPuppetBridgeBase {
       })
     });
 
-    this.groups = new Map(); // abstract storage for groups
-    
     // triggered when we run syncGroups
     this.client.on('group', (ev) => {
       if(!ev.groupDetails.active) {
         return;
       }
-      //No need for queue as no room will be created
-      this.handleSignalGroup(ev.groupDetails);
-    });
-
-    this.contacts = new Map();
-    
-    this.client.on('contact', async (ev) => {
-      console.log('contact received', ev.contactDetails);
-      let contact = {};
-      contact.userId = ev.contactDetails.number;
-      contact.senderName = ev.contactDetails.name;
-      contact.name = ev.contactDetails.name;
-      if (contact.name == null) {
-        //If the unnamed sender allows us to use his profile name we will use this
-        contact.name = await this.client.getProfileNameForId(contact.userId);
-      }
-
-      if(ev.contactDetails.avatar) {
-        let dataBuffer = Buffer.from(ev.contactDetails.avatar.data);
-        contact.avatar = {type: 'image/jpeg', buffer: dataBuffer};
-      }
-      this.contacts.set(ev.contactDetails.number, contact);
-      messageQueue.add(() => {
-        console.log('Adding contact to status room');
-        return this.joinThirdPartyUsersToStatusRoom([contact]);
+      signalQueue.add(() => {
+        return this.handleSignalGroup(ev.groupDetails);
       });
     });
-
-    setTimeout(this.client.syncContacts, 5000); // request for sync contacts
-    setTimeout(this.client.syncGroups, 10000); // request for sync groups
+    
+    this.client.on('contact', (ev) => {
+      //Makes startup slower but ensures all contacts are synced as we have no race in joining status room
+      signalQueue.add(async () => {
+        return this.handleSignalContact(ev.contactDetails);
+      });
+    });
 
     this.client.on('read', (ev) => {
       const { timestamp, reader } = ev.read;
       console.log("read event", timestamp, reader);
-      this.handleSignalReadReceipt(timestamp, reader);
+      signalQueue.add(() => {
+        return this.handleSignalReadReceipt(timestamp, reader);
+      });
     });
 
     this.client.on('typing', (ev)=>{
@@ -132,10 +116,88 @@ class App extends MatrixPuppetBridgeBase {
       if(ev.typing.groupId) {
         group = window.btoa(ev.typing.groupId);
       }
-      this.handleTypingEvent(sender,status,group);
+      signalQueue.add(() => {
+        this.handleTypingEvent(sender,status,group);
+      });
     });    
+    
+    
+    this.client.on('client_ready', () => {
+      //Request sync and start handling of signal stuff
+      this.client.syncContacts();
+      this.client.syncGroups();
+      signalQueue.start();
+    });
 
     return this.client.start();
+  }
+  
+  async handleSignalContact(contactDetails) {
+    console.log('contact received', contactDetails);
+    let contact = {};
+    contact.userId = contactDetails.number;
+    if (contactDetails.name != null) {
+      contact.senderName = contactDetails.name;
+      contact.name = contactDetails.name;
+    }
+    else {
+      //If the unnamed sender allows us to use his profile name we will use this
+      contact.name = await this.client.getProfileNameForId(contact.userId);
+      contact.senderName = await this.client.getProfileNameForId(contact.userId);
+    }
+    if (!contact.name) {
+      contact.name = "Unnamed Person";
+      contact.senderName = "Unnamed Person";
+    }
+
+    const signalAvatarPath = await this.client.getPathForAvatar(contactDetails.number, false);
+    if (signalAvatarPath != null) {
+      contact.avatar = signalAvatarPath;
+    }
+    else if(contactDetails.avatar) {
+      let avatarBuffer = Buffer.from(contactDetails.avatar.data);
+      const fileName = contactDetails.number.replace(/[^a-zA-Z0-9]/g, '');
+      fs.writeFileSync(process.cwd() + '/data/' + fileName, avatarBuffer);
+      contact.avatar = process.cwd() + '/data/' + fileName;
+    }
+    
+    const userStore = this.bridge.getUserStore();
+    let rUser = await userStore.getRemoteUser(contact.userId);
+    if ( rUser ) {
+      //If we saved it temporary so far we delete the old file
+      if (rUser.get('avatar') && !rUser.get('avatar').includes("attachments.noindex") && !(rUser.get('avatar') != contact.avatar)) {
+        fs.unlinkSync(rUser.get('avatar'));
+      }
+      rUser.set('name', contact.name);
+      rUser.set('senderName', contact.senderName);
+      rUser.set('avatar', contact.avatar);
+      await userStore.setRemoteUser(rUser);
+    }
+    else {
+      //To differentiate between user and groups
+      contact.isGroup = false;
+      await userStore.setRemoteUser(new RemoteUser(contact.userId, contact));
+    }
+    
+    let retry = 3;
+    let lastError;
+    let timeOut = 100;
+    while (retry--) {
+      try {
+        //Get avatar as data array instead of path
+        contact = await this.getThirdPartyUserDataById(contact.userId);
+        return await this.joinThirdPartyUsersToStatusRoom([contact]);
+      } catch(err) {
+        lastError = err;
+      }
+      if (lastError.errcode == 'M_LIMIT_EXCEEDED' && lastError.data.retry_after_ms) {
+        console.log("Matrix forces us to wait for ", lastError.data.retry_after_ms);
+        timeOut = lastError.data.retry_after_ms;
+      }            
+      await sleep(timeOut);
+    }
+    console.log("Could not join user to status room, error:", lastError);
+    return;
   }
   
   async handleSignalGroup(groupDetails) {
@@ -146,20 +208,53 @@ class App extends MatrixPuppetBridgeBase {
     }
     let group = { name: groupDetails.name };
     if(groupDetails.avatar) {
+      let avatarBuffer;
       //If desktop knows the group it sends an array buffer
       if (groupDetails.avatar.data) {
-        group.avatar = {type: 'image/jpeg', buffer: groupDetails.avatar.data};
+        //We would prefer to use existing avatar
+        const signalAvatarPath = await this.client.getPathForAvatar(groupDetails.id, true);
+        if (signalAvatarPath != null) {
+          group.avatar = signalAvatarPath;
+        }
+        else {
+          const fileName = id.replace(/[^a-zA-Z0-9]/g, '');
+          fs.writeFileSync(process.cwd() + '/data/' + fileName, Buffer.from(groupDetails.avatar.data));
+          group.avatar = process.cwd() + '/data/' + fileName;
+        }
       }
-      //Otherwise we have to download it first
+      //New group, we have to download the avatar first
       else {
         const avData = await this.client.downloadAttachment(groupDetails.avatar);
-        group.avatar = {type: 'image/jpeg', buffer: avData.data};
+        const fileName = id.replace(/[^a-zA-Z0-9]/g, '');
+        fs.writeFileSync(process.cwd() + '/data/' + fileName, Buffer.from(avData.data));
+        group.avatar = process.cwd() + '/data/' + fileName;
       }
     }
     const otherPeople = groupDetails.membersE164.filter(phoneNumber => !phoneNumber.match(this.myNumber));
     group.members = otherPeople;
       
-    this.groups.set(id, group);
+    //We use userStore for groups as rooms need a linked matrix room
+    const userStore = this.bridge.getUserStore();
+    let rGroup = await userStore.getRemoteUser(id);
+    if ( rGroup ) {
+      if ( rGroup.get('isGroup') == true) {
+        if (rGroup.get('avatar') && !rGroup.get('avatar').includes("attachments.noindex") && !(rGroup.get('avatar') != group.avatar)) {
+          fs.unlinkSync(rGroup.get('avatar'));
+        }
+        rGroup.set('name', group.name);
+        rGroup.set('avatar', group.avatar);
+        rGroup.set('members', group.members);
+        await userStore.setRemoteUser(rGroup);
+      }
+      else {
+        console.error("There seems to be a user with the same id as a new group");
+        return;
+      }
+    }
+    else {
+      group.isGroup = true;
+      await userStore.setRemoteUser(new RemoteUser(id, group));
+    }
     
     const matrixRoomId = await this.getOrCreateMatrixRoomFromThirdPartyRoomId(id);
 
@@ -237,6 +332,7 @@ class App extends MatrixPuppetBridgeBase {
       }
     }
     
+    //TODO: Still needed? Checking when getting contacts anyway
     if (!payload.senderName) {  //Make sure senders have a name so they show up.
       if (payload.senderId) {
         const remoteUser = await this.getOrInitRemoteUserStoreDataFromThirdPartyUserId(payload.senderId);
@@ -307,58 +403,73 @@ class App extends MatrixPuppetBridgeBase {
       debug('could not send read event', err.message);
     }
   }
-
-  getThirdPartyRoomDataById(id) {
+// 
+  async getThirdPartyRoomDataById(thirdPartyRoomId) {
     let name = "";
     let topic = "Signal Direct Message";
     let avatar;
     let direct = true;
-    if ( this.contacts.has(id) ) {
-      name = this.contacts.get(id).name;
-      avatar = this.contacts.get(id).avatar;
-    }
-    if ( this.groups.has(id) ) {
-      name = this.groups.get(id).name;
-      topic = "Signal Group Message";
-      avatar = this.groups.get(id).avatar;
-      direct = false;
+    const room = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
+    if ( room ) {
+      name = room.get('name');
+      let avatarPath = room.get('avatar');
+      if (avatarPath) {
+        let file = fs.readFileSync(avatarPath);
+        avatar = {type: 'image/jpeg', buffer: new Uint8Array(file) };        
+      }
+      if (room.get('isGroup') == true) {
+        topic = "Signal Group Message";
+        direct = false;
+      }
     }
     return Promise.resolve({name, topic, avatar, is_direct: direct});
   }
-  getThirdPartyUserDataById(id) {
-    if(this.contacts.has(id)) {
-      let contact = this.contacts.get(id);
-      contact.is_direct = true;
-      return contact;
+  async getThirdPartyUserDataById(thirdPartyRoomId) {
+    let contact = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
+    if ( contact && contact.get('isGroup') == false ) {
+      let avatarPath = contact.get('avatar');
+      if (avatarPath) {
+        let file = fs.readFileSync(avatarPath);
+        contact.data.avatar = {type: 'image/jpeg', buffer: new Uint8Array(file) };        
+      }
+      return contact.data;
     } else {
-      return {senderName: id};
+      return {senderName: thirdPartyRoomId};
     }
   }
   async sendReadReceiptAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId) {
     let timeStamp = await new Date().getTime();
-    if (this.groups.has(thirdPartyRoomId)) {
+    let isGroup = false;
+    const room = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
+    if ( room && room.get('isGroup') == true) {
       thirdPartyRoomId = window.atob(thirdPartyRoomId);
+      isGroup = true;
     }
     
     console.log("sending read receipts for " + thirdPartyRoomId);
 
     // mark messages as read in your signal clients
-    await this.client.syncReadReceipts(thirdPartyRoomId, this.groups.has(thirdPartyRoomId), timeStamp, config.sendReadReceipts);
+    await this.client.syncReadReceipts(thirdPartyRoomId, isGroup, timeStamp, config.sendReadReceipts);
 
     return true;
   }
 
   async sendTypingEventAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, status) {
-    if (this.groups.has(thirdPartyRoomId)) {
+    let isGroup = false;
+    const room = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
+    if ( room && room.get('isGroup') == true) {
       thirdPartyRoomId = window.atob(thirdPartyRoomId);
+      isGroup = true;
     }
-    await this.client.sendTypingMessage(thirdPartyRoomId, this.groups.has(thirdPartyRoomId), status, config.sendTypingEvents);
+    
+    await this.client.sendTypingMessage(thirdPartyRoomId, isGroup, status, config.sendTypingEvents);
   }
   
   async sendReactionAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, data) {
     try {
       let isGroup = false;
-      if (this.groups.has(thirdPartyRoomId)) {
+      const room = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
+      if ( room && room.get('isGroup') == true) {
         thirdPartyRoomId = window.atob(thirdPartyRoomId);
         isGroup = true;
       }
@@ -394,10 +505,11 @@ class App extends MatrixPuppetBridgeBase {
     return this.sendFileMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, info, data);
   }
 
-  sendFileMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, info, data) {
+  async sendFileMessageAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, info, data) {
     info.text = "";
     let isGroup = false;
-    if (this.groups.has(thirdPartyRoomId)) {
+    const room = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
+    if ( room && room.get('isGroup') == true) {
       thirdPartyRoomId = window.atob(thirdPartyRoomId);
       isGroup = true;
     }
@@ -460,14 +572,15 @@ class App extends MatrixPuppetBridgeBase {
         };
         text = origFormated.substring(endQuote+24);
         
-      }     
+      }
       else {
         debug('no event found for', matrixRoomId, matrixEventId);
       }
     }
     
     let isGroup = false;
-    if (this.groups.has(thirdPartyRoomId)) {
+    const room = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
+    if ( room && room.get('isGroup') == true) {
       thirdPartyRoomId = window.atob(thirdPartyRoomId);
       isGroup = true;
     }
@@ -493,6 +606,14 @@ class App extends MatrixPuppetBridgeBase {
       message = new StoredEvent(matrixRoomId, matrixEventId, timeStamp, members[i], {sentByMe: sentMessage});
       this.bridge.getEventStore().upsertEvent(message);
     }
+  }
+  
+  async sendLeavingEventAsPuppetToThirdPartyRoomWithId(thirdPartyRoomId, data) {
+    const room = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
+    if ( room && room.get('isGroup') == true) {
+      thirdPartyRoomId = window.atob(thirdPartyRoomId);
+      this.client.leaveGroup(thirdPartyRoomId);
+    }    
   }
 }
 
