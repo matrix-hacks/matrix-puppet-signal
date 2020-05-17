@@ -87,6 +87,9 @@ Make sure you are using a new enough node version, either the newest (13.13.0 at
 ### I get an error about "Cannot read property 'upsertEvent' of null"
 Make sure your config.json contains the eventStore property, see config.sample.json
 
+### I get an "M_UNKNOWN_TOKEN" error
+Your access token from your matrix account is not working anymore. Replace it with a new one in your config.json
+
 
 
 ## Discussion, Help and Support
