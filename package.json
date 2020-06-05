@@ -11,6 +11,6 @@
   },
   "dependencies": {
     "matrix-puppet-bridge": "witchent/matrix-puppet-bridge#master",
-    "signal-client": "witchent/node-signal-client#master"
+    "signal-client": "witchent/node-signal-client#32743ce"
   }
 }
