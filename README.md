@@ -2,7 +2,7 @@
 
 This is a Matrix bridge for Signal, messenger app by Open Whisper Systems.
 
-It's based on the official [Signal-Desktop](https://github.com/WhisperSystems/Signal-Desktop) Client that has been ported to Node.js with minor modifications. They are necessary to remove things that are related to Electron that provides the graphical interface. You can find that here: https://github.com/matrix-hacks/Signal-Desktop / https://github.com/matrix-hacks/node-signal-client
+It's based on the official [Signal-Desktop](https://github.com/WhisperSystems/Signal-Desktop) Client that has been ported to Node.js with minor modifications. They are necessary to remove things that are related to Electron that provides the graphical interface. You can find that here: https://github.com/witchent/Signal-Desktop / https://github.com/witchent/node-signal-client
 
 ## Features
 
@@ -79,7 +79,7 @@ Launch the bridge with `start.sh` or `node index.js`. If you want to run the bri
 
 
 ## FAQ
-See also https://github.com/matrix-hacks/matrix-puppet-bridge
+See also https://github.com/witchent/matrix-puppet-bridge
 
 ### I get Error: Cannot find module 'matrix-puppet-signal/node_modules/sqlite3/lib/binding/node-v72-linux-x64/node_sqlite3.node' while building the app
 Make sure you are using a new enough node version, either the newest (13.13.0 at the time of writing) or 12.13.0
