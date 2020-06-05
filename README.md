@@ -30,6 +30,7 @@ required software:
 - Node.js
 - yarn
 - python2
+- npm
 
 Please verify if `yarn -v` outputs something like `1.17.3`. If your output is `ERROR: There are no scenarios; must have at least one.` you have installed cmdtests instead of yarn. Please [install yarn](https://yarnpkg.com/en/docs/install) before you continue.
 
