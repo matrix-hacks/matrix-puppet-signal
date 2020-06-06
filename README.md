@@ -46,6 +46,18 @@ run `npm install`
 
 **Note:** Run neither the installation command nor the bridge itself with root rights.
 
+### extra step if you are using ARM or any other architecture not supported by signal-desktop
+
+install rust (and cargo if not automatically installed)
+
+clone https://github.com/signalapp/zkgroup
+
+cd into zkgroup
+
+run `make libzkgroup`
+
+copy `target/release/libzkgroup.so` (or `.dll/.dylib`) to `matrix-puppet-signal/node_modules/signal-desktop/node_modules/zkgroup/`, overwriting the existing file in that directory.
+
 ## register/link with your signal mobile app
 
 Before configuring the bridge with Matrix, **you need to setup the Signal link with your phone**.
@@ -91,6 +103,12 @@ Make sure your config.json contains the eventStore property, see config.sample.j
 
 ### I get an "M_UNKNOWN_TOKEN" error
 Your access token from your matrix account is not working anymore. Replace it with a new one in your config.json
+
+### `npm run link` complains about missing library (libzkgroup.so) even though it is there
+Follow the "extra step if you are using ARM or any other architecture not supported by signal-desktop" from above, you need to compile the library for your architecture.
+
+### I want to use the bridge with the official docker-ansible-deploy 
+See here for an unofficial guide: https://paste.sr.ht/~e-v/e34a498ecce0fa2b7f7d6d16c7adb01cf072d014 (thanks @edgar.vincent)
 
 
 
