@@ -67,7 +67,7 @@ class App extends MatrixPuppetBridgeBase {
         }
         room = window.btoa(message.group.id);
 //We add all members to be able to correctly use read receipts
-        const rRoom = await this.bridge.getUserStore().getRemoteUser(thirdPartyRoomId);
+        const rRoom = await this.bridge.getUserStore().getRemoteUser(room);
         if ( rRoom && rRoom.get('isGroup') == true) {
           members = rRoom.members;
         }
